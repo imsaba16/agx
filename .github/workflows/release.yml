@@ -19,11 +19,6 @@ jobs:
             target: aarch64-apple-darwin
             binary_name: agx
             asset_name: agx-macos-arm64
-          # macOS Intel
-          - os: macos-13
-            target: x86_64-apple-darwin
-            binary_name: agx
-            asset_name: agx-macos-x86_64
           # Linux x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
