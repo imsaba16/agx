@@ -20,7 +20,7 @@ struct Cli {
     data_dir: Option<PathBuf>,
 
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -97,10 +97,10 @@ fn main() -> Result<()> {
     let paths = AntigravityPaths::discover(cli.data_dir)?;
 
     match cli.command {
-        Commands::List { workspace, limit } => {
+        Some(Commands::List { workspace, limit }) => {
             handle_list(&paths, workspace, limit)?;
         }
-        Commands::Export {
+        Some(Commands::Export {
             id,
             output,
             workspace_root,
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
             compact,
             interactive,
             ignore_file,
-        } => {
+        }) => {
             handle_export(
                 &paths,
                 id,
@@ -120,19 +120,81 @@ fn main() -> Result<()> {
                 ignore_file,
             )?;
         }
-        Commands::Info { bundle } => {
+        Some(Commands::Info { bundle }) => {
             handle_info(&bundle)?;
         }
-        Commands::Import {
+        Some(Commands::Import {
             bundle,
             target_workspace,
             overwrite,
             dry_run,
-        } => {
+        }) => {
             handle_import(&paths, bundle, target_workspace, overwrite, dry_run)?;
+        }
+        None => {
+            run_interactive_dashboard(&paths)?;
         }
     }
 
+    Ok(())
+}
+
+fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
+    println!("\n{}", "⚡ agx: Antigravity Context & Brain eXchange".bold().cyan());
+    println!("{}", "================================================".dimmed());
+
+    loop {
+        let options = vec![
+            "📋 1. List conversations",
+            "📦 2. Export a conversation (Interactive Picker)",
+            "⚡ 3. Export a conversation (Compact Mode)",
+            "🔍 4. Inspect an .agbundle file",
+            "📥 5. Import an .agbundle file",
+            "🚪 6. Exit",
+        ];
+
+        let selection = match inquire::Select::new("What would you like to do?", options).prompt() {
+            Ok(s) => s,
+            Err(_) => break,
+        };
+
+        if selection.starts_with("📋 1") {
+            let _ = handle_list(paths, None, 20);
+        } else if selection.starts_with("📦 2") {
+            let _ = handle_export(paths, None, None, None, true, false, true, None);
+        } else if selection.starts_with("⚡ 3") {
+            let _ = handle_export(paths, None, None, None, true, true, true, None);
+        } else if selection.starts_with("🔍 4") {
+            let path_str = match inquire::Text::new("Enter path to .agbundle:").prompt() {
+                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
+                _ => continue,
+            };
+            let _ = handle_info(Path::new(&path_str));
+        } else if selection.starts_with("📥 5") {
+            let bundle_path_str = match inquire::Text::new("Enter path to .agbundle to import:").prompt() {
+                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
+                _ => continue,
+            };
+            let ws_path_str = match inquire::Text::new("Target workspace path (press Enter for current folder):").prompt() {
+                Ok(s) => s.trim().to_string(),
+                _ => String::new(),
+            };
+            let target_ws = if ws_path_str.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(ws_path_str))
+            };
+            let _ = handle_import(paths, PathBuf::from(bundle_path_str), target_ws, false, false);
+        } else {
+            break;
+        }
+
+        println!();
+    }
+
+    println!("\nPress Enter to exit...");
+    let mut dummy = String::new();
+    let _ = std::io::stdin().read_line(&mut dummy);
     Ok(())
 }
 
