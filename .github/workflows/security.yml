@@ -11,10 +11,17 @@ on:
       - 'Cargo.toml'
   workflow_dispatch:
 
+permissions:
+  checks: write
+  contents: read
+
 jobs:
   security-audit:
     name: Security Vulnerability Scan
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
