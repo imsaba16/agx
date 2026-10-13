@@ -289,6 +289,7 @@ Yes. The `agx search`, `agx cat`, and `agx extract` commands read directly from 
 
 - [CLI Reference Guide](docs/cli-reference.md): Detailed parameter, flag, and option breakdown for all subcommands.
 - [Architecture & Format Specification](docs/architecture.md): Internal design, manifest schemas, and data structures.
+- [Packaging & Distribution Guide](docs/packaging-and-distribution.md): Setup instructions for Homebrew, Scoop, WinGet, and multi-platform binary releases.
 - [Security Policy](SECURITY.md): Vulnerability reporting procedures and mitigation strategies.
 - [Contributing Guide](CONTRIBUTING.md): Development environment setup, linting, and testing workflows.
 - [Changelog](CHANGELOG.md): Release notes and version history.
