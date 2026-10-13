@@ -27,7 +27,13 @@ jobs:
       - name: Check version and existing tag
         id: check
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d '"' -f 2)
+            TAG="v$VERSION"
+            echo "Manual workflow dispatch for $TAG"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TAG="${{ github.ref_name }}"
             echo "Triggered by manual tag: $TAG"
             echo "should_release=true" >> "$GITHUB_OUTPUT"
@@ -37,15 +43,17 @@ jobs:
             TAG="v$VERSION"
             echo "Cargo.toml version: $VERSION -> Target tag: $TAG"
             
-            if git rev-parse "$TAG" >/dev/null 2>&1; then
-              echo "Tag $TAG already exists. Skipping release."
+            if curl -s -f -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" >/dev/null; then
+              echo "GitHub release for $TAG already exists. Skipping."
               echo "should_release=false" >> "$GITHUB_OUTPUT"
             else
-              echo "Creating new git tag: $TAG"
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              git tag -a "$TAG" -m "Release $TAG"
-              git push origin "$TAG"
+              echo "GitHub release for $TAG does not exist yet. Proceeding with release!"
+              if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+                git config user.name "github-actions[bot]"
+                git config user.email "github-actions[bot]@users.noreply.github.com"
+                git tag -a "$TAG" -m "Release $TAG"
+                git push origin "$TAG"
+              fi
               echo "should_release=true" >> "$GITHUB_OUTPUT"
               echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
             fi
