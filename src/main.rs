@@ -290,94 +290,174 @@ fn main() -> Result<()> {
 }
 
 fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
-    println!("\n{}", "⚡ agx: Antigravity Context & Brain eXchange".bold().cyan());
-    println!("{}", "================================================".dimmed());
+    let render_config = agx::ui::get_render_config();
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    let db = Database::new(&paths.summaries_db());
+    let (active_conv, ws_sessions_count) = if paths.summaries_db().exists() {
+        let ws_convs = db.find_conversations_for_workspace(&cwd).unwrap_or_default();
+        let count = ws_convs.len();
+        let active = ws_convs.into_iter().next();
+        (active, count)
+    } else {
+        (None, 0)
+    };
+
+    agx::ui::render_context_header(&cwd, active_conv.as_ref(), ws_sessions_count);
+
+    struct ActionItem {
+        id: &'static str,
+        title: &'static str,
+        desc: &'static str,
+    }
+
+    impl std::fmt::Display for ActionItem {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:<32} {}", self.title, self.desc.dimmed())
+        }
+    }
+
+    let actions = [
+        ActionItem {
+            id: "export_active",
+            title: "Export active session",
+            desc: "Package current conversation into .agbundle",
+        },
+        ActionItem {
+            id: "export_project",
+            title: "Export entire project (.agproject)",
+            desc: "All conversations, brain files, skills & MCP",
+        },
+        ActionItem {
+            id: "browse_export",
+            title: "Browse & export past sessions",
+            desc: "Interactive session picker with search",
+        },
+        ActionItem {
+            id: "inspect",
+            title: "Inspect archive metadata",
+            desc: "View manifest, steps, and artifacts",
+        },
+        ActionItem {
+            id: "verify",
+            title: "Verify archive integrity",
+            desc: "Cryptographic SHA-256 audit & security check",
+        },
+        ActionItem {
+            id: "import",
+            title: "Import archive into workspace",
+            desc: "Restore .agbundle or .agproject into Antigravity",
+        },
+        ActionItem {
+            id: "list",
+            title: "List workspace sessions",
+            desc: "View formatted conversation history table",
+        },
+        ActionItem {
+            id: "exit",
+            title: "Exit",
+            desc: "Close agx",
+        },
+    ];
 
     loop {
-        let options = vec![
-            "📋 1. List conversations",
-            "📦 2. Export a conversation (Interactive Picker)",
-            "⚡ 3. Export a conversation (Compact Mode)",
-            "🔍 4. Inspect an .agbundle file",
-            "📥 5. Import an .agbundle file",
-            "🗂️ 6. Export entire project (.agproject)",
-            "🔎 7. Inspect an .agproject file",
-            "📥 8. Import an .agproject file",
-            "🛡️ 9. Verify bundle integrity & security (.agbundle / .agproject)",
-            "🚪 10. Exit",
-        ];
-
-        let selection = match inquire::Select::new("What would you like to do?", options).prompt() {
-            Ok(s) => s,
+        let selection = match inquire::Select::new("Select an action:", actions.iter().collect())
+            .with_render_config(render_config)
+            .with_page_size(10)
+            .prompt()
+        {
+            Ok(s) => s.id,
             Err(_) => break,
         };
 
-        if selection.starts_with("📋 1") {
-            let _ = handle_list(paths, None, 20, false);
-        } else if selection.starts_with("📦 2") {
-            let _ = handle_export(paths, None, None, None, true, false, true, None);
-        } else if selection.starts_with("⚡ 3") {
-            let _ = handle_export(paths, None, None, None, true, true, true, None);
-        } else if selection.starts_with("🔍 4") {
-            let path_str = match inquire::Text::new("Enter path to .agbundle:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let _ = handle_info(Path::new(&path_str), false);
-        } else if selection.starts_with("📥 5") {
-            let bundle_path_str = match inquire::Text::new("Enter path to .agbundle to import:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let ws_path_str = match inquire::Text::new("Target workspace path (press Enter for current folder):").prompt() {
-                Ok(s) => s.trim().to_string(),
-                _ => String::new(),
-            };
-            let target_ws = if ws_path_str.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(ws_path_str))
-            };
-            let _ = handle_import(paths, PathBuf::from(bundle_path_str), target_ws, false, false);
-        } else if selection.starts_with("🗂️ 6") {
-            let _ = handle_project_export(paths, None, None, false, true, true, true, None);
-        } else if selection.starts_with("🔎 7") {
-            let path_str = match inquire::Text::new("Enter path to .agproject:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let _ = handle_project_info(Path::new(&path_str), false);
-        } else if selection.starts_with("📥 8") {
-            let bundle_path_str = match inquire::Text::new("Enter path to .agproject to import:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let ws_path_str = match inquire::Text::new("Target workspace path (press Enter for current folder):").prompt() {
-                Ok(s) => s.trim().to_string(),
-                _ => String::new(),
-            };
-            let target_ws = if ws_path_str.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(ws_path_str))
-            };
-            let _ = handle_project_import(paths, PathBuf::from(bundle_path_str), target_ws, false, true, false);
-        } else if selection.starts_with("🛡️ 9") {
-            let path_str = match inquire::Text::new("Enter path to .agbundle or .agproject to verify:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let _ = handle_verify(Path::new(&path_str), false);
-        } else {
-            break;
+        match selection {
+            "export_active" => {
+                let compact_prompt = inquire::Select::new(
+                    "Select export mode:",
+                    vec![
+                        "Compact Mode  (Fast, lightweight, skips heavy raw step logs & media)",
+                        "Full Fidelity (Complete raw step logs and heavy media)",
+                    ],
+                )
+                .with_render_config(render_config)
+                .prompt();
+
+                match compact_prompt {
+                    Ok(choice) => {
+                        let is_compact = choice.starts_with("Compact");
+                        let _ = handle_export(paths, None, None, None, true, is_compact, false, None);
+                    }
+                    _ => continue,
+                }
+            }
+            "export_project" => {
+                let compact_prompt = inquire::Select::new(
+                    "Select project export mode:",
+                    vec![
+                        "Full Fidelity (All conversations, complete logs, skills & MCP)",
+                        "Compact Mode  (Stripped raw step logs across all sessions)",
+                    ],
+                )
+                .with_render_config(render_config)
+                .prompt();
+
+                match compact_prompt {
+                    Ok(choice) => {
+                        let is_compact = choice.starts_with("Compact");
+                        let _ = handle_project_export(paths, None, None, is_compact, true, true, true, None);
+                    }
+                    _ => continue,
+                }
+            }
+            "browse_export" => {
+                let _ = handle_export(paths, None, None, None, true, false, true, None);
+            }
+            "inspect" => {
+                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to inspect:") {
+                    if is_project_archive(&archive_path) {
+                        let _ = handle_project_info(&archive_path, false);
+                    } else {
+                        let _ = handle_info(&archive_path, false);
+                    }
+                }
+            }
+            "verify" => {
+                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to verify:") {
+                    let _ = handle_verify(&archive_path, false);
+                }
+            }
+            "import" => {
+                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to import:") {
+                    let ws_path_str = match inquire::Text::new("Target workspace path (press Enter for current folder):")
+                        .with_render_config(render_config)
+                        .prompt()
+                    {
+                        Ok(s) => s.trim().to_string(),
+                        _ => String::new(),
+                    };
+                    let target_ws = if ws_path_str.is_empty() {
+                        None
+                    } else {
+                        Some(PathBuf::from(ws_path_str))
+                    };
+
+                    if is_project_archive(&archive_path) {
+                        let _ = handle_project_import(paths, archive_path, target_ws, false, true, false);
+                    } else {
+                        let _ = handle_import(paths, archive_path, target_ws, false, false);
+                    }
+                }
+            }
+            "list" => {
+                let _ = handle_list(paths, None, 20, false);
+            }
+            "exit" => break,
+            _ => break,
         }
 
         println!();
     }
 
-    println!("\nPress Enter to exit...");
-    let mut dummy = String::new();
-    let _ = std::io::stdin().read_line(&mut dummy);
     Ok(())
 }
 
@@ -528,6 +608,7 @@ fn select_conversation_interactively(
         .collect();
 
     let ans = inquire::Select::new("Select conversation to export:", items)
+        .with_render_config(agx::ui::get_render_config())
         .with_page_size(15)
         .with_help_message("Use ↑/↓ arrows to navigate, type to filter, Esc to cancel")
         .prompt();
@@ -613,7 +694,7 @@ fn handle_export(
         custom_ignore_file: ignore_file,
     };
 
-    println!("\n{}", "📦 Packaging Antigravity Brain Bundle...".bold().cyan());
+    println!("\n{}", "● Packaging Session Archive (.agbundle)".bold().cyan());
     println!("  Title       : {}", summary.title.bold());
     println!("  ID          : {}", conv_id);
     println!("  Sanitize    : {}", if sanitize { "YES (Masking secrets)".green() } else { "NO".yellow() });
@@ -628,7 +709,7 @@ fn handle_export(
     println!(
         "\n{}",
         format!(
-            "✅ Successfully exported bundle! Packaged {} brain files ({} files excluded by .agignore/compact filter).",
+            "✔ Successfully exported session archive! Packaged {} brain files ({} files excluded by .agignore/compact filter).",
             manifest.artifacts_count,
             manifest.ignored_count
         )
@@ -681,7 +762,7 @@ fn handle_import(
         dry_run,
     };
 
-    println!("\n{}", "📥 Importing Antigravity Bundle...".bold().cyan());
+    println!("\n{}", "● Importing Session Archive...".bold().cyan());
     if dry_run {
         println!("{}", "MODE: DRY-RUN (No files will be modified)".yellow().bold());
     }
@@ -701,7 +782,7 @@ fn handle_import(
     } else {
         println!(
             "\n{}",
-            "✅ Successfully imported into Antigravity! Ready to use in chat or IDE."
+            "✔ Successfully imported into Antigravity! Ready to use in chat or IDE."
                 .bold()
                 .green()
         );
@@ -738,21 +819,21 @@ fn handle_verify(bundle_path: &Path, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("\n{}", "🛡️  AGX Bundle Integrity & Security Audit".bold().cyan());
-    println!("{}", "================================================".dimmed());
+    println!("\n{}", "● AGX Security & Integrity Audit".bold().cyan());
+    println!("{}", "────────────────────────────────────────────────".dimmed());
     println!("  Archive File   : {:?}", bundle_path);
     println!("  Archive Format : {}", archive_type.bold());
     println!("  Files Checked  : {}", report.total_files_checked.to_string().cyan());
     println!("  Valid Hashes   : {}", report.matched_checksums.to_string().green().bold());
 
     if report.is_valid {
-        println!("\n{}", "✅ INTEGRITY AUDIT PASSED".bold().green());
+        println!("\n{}", "✔ INTEGRITY AUDIT PASSED".bold().green());
         println!("  • SHA-256 Checksums : Verified all recorded files match cryptographic hashes.");
         println!("  • Path Traversal    : No Zip-Slip or illegal path traversal vectors detected.");
         println!("  • Resource Limits   : Decompression bomb safeguards enforced & verified.");
         println!("  • File Modes        : Sanitized permissions (0o644 / 0o755).\n");
     } else {
-        println!("\n{}", "❌ INTEGRITY AUDIT FAILED".bold().red());
+        println!("\n{}", "✖ INTEGRITY AUDIT FAILED".bold().red());
         if !report.mismatched_files.is_empty() {
             println!("\n{}", "  Mismatched Checksums (File Tampering Detected):".red().bold());
             for f in &report.mismatched_files {
@@ -837,6 +918,7 @@ fn select_project_conversations_interactively(
         .collect();
 
     let ans = inquire::MultiSelect::new("Select conversations to include in project archive:", items)
+        .with_render_config(agx::ui::get_render_config())
         .with_all_selected_by_default()
         .with_page_size(15)
         .with_help_message("Use Space to toggle, ↑/↓ to navigate, type to filter, Enter to confirm")
@@ -908,7 +990,7 @@ fn handle_project_export(
         custom_ignore_file: ignore_file,
     };
 
-    println!("\n{}", "🗂️  Packaging Antigravity Project Bundle...".bold().cyan());
+    println!("\n{}", "● Packaging Project Archive (.agproject)".bold().cyan());
     println!("  Workspace Root : {:?}", ws_root);
     println!("  Project Name   : {}", project_name.bold());
     println!("  Customizations : {}", if include_customizations { "YES (.agents/skills, rules, MCP)".green() } else { "NO (Skipped)".yellow() });
@@ -921,7 +1003,7 @@ fn handle_project_export(
     println!(
         "\n{}",
         format!(
-            "✅ Successfully exported project bundle! Packaged {} conversations, {} brain artifacts ({} excluded).",
+            "✔ Successfully exported project archive! Packaged {} conversations, {} brain artifacts ({} excluded).",
             manifest.conversations.len(),
             manifest.total_artifacts_count,
             manifest.total_ignored_count,
@@ -1008,7 +1090,7 @@ fn handle_project_import(
         restore_customizations,
     };
 
-    println!("\n{}", "📥 Importing Antigravity Project Bundle...".bold().cyan());
+    println!("\n{}", "● Importing Project Archive (.agproject)...".bold().cyan());
     if dry_run {
         println!("{}", "MODE: DRY-RUN (No files will be modified)".yellow().bold());
     }
@@ -1030,7 +1112,7 @@ fn handle_project_import(
         println!(
             "\n{}",
             format!(
-                "✅ Successfully imported project! Restored {} conversations and workspace context.",
+                "✔ Successfully imported project! Restored {} conversations and workspace context.",
                 count
             )
             .bold()
