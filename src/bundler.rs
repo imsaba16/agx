@@ -29,7 +29,10 @@ impl Bundler {
         let brain_path = paths.conversation_brain(conv_id);
         let conv_db_path = paths.conversation_db(conv_id);
 
-        let remapper = options.workspace_root.as_ref().map(|root| PathRemapper::for_export(root));
+        let remapper = options
+            .workspace_root
+            .as_ref()
+            .map(|root| PathRemapper::for_export(root));
         let sanitizer = if options.sanitize {
             Some(SecretSanitizer::new())
         } else {
@@ -166,8 +169,12 @@ impl Bundler {
         manifest.checksums = checksums;
 
         // Create zstd compressed archive (level 3 for ultra-fast compression and high ratio)
-        let file = File::create(&options.output_path)
-            .with_context(|| format!("Failed to create output archive at {:?}", options.output_path))?;
+        let file = File::create(&options.output_path).with_context(|| {
+            format!(
+                "Failed to create output archive at {:?}",
+                options.output_path
+            )
+        })?;
         let zstd_enc = zstd::stream::write::Encoder::new(file, 3)?;
         let mut tar = Builder::new(zstd_enc);
 
@@ -231,13 +238,21 @@ impl Bundler {
             let path_buf = entry.path()?.to_path_buf();
             let path_str = path_buf.to_string_lossy().replace('\\', "/");
 
-            if let Err(e) = crate::security::SafePathValidator::validate_and_resolve(Path::new("."), &path_buf) {
-                errors.push(format!("Path traversal vulnerability detected in entry '{}': {}", path_str, e));
+            if let Err(e) =
+                crate::security::SafePathValidator::validate_and_resolve(Path::new("."), &path_buf)
+            {
+                errors.push(format!(
+                    "Path traversal vulnerability detected in entry '{}': {}",
+                    path_str, e
+                ));
             }
 
             let entry_len = entry.header().size()?;
             if let Err(e) = limit_guard.check_and_add(entry_len) {
-                errors.push(format!("Resource limit breached in entry '{}': {}", path_str, e));
+                errors.push(format!(
+                    "Resource limit breached in entry '{}': {}",
+                    path_str, e
+                ));
             }
 
             if path_str == "manifest.json" {
@@ -301,8 +316,8 @@ impl Bundler {
 
 /// Open an archive supporting both Zstandard (.zst) and Gzip (.gz) automatically via magic bytes
 pub fn open_archive(path: &Path) -> Result<Archive<Box<dyn Read>>> {
-    let mut file = File::open(path)
-        .with_context(|| format!("Failed to open bundle at {:?}", path))?;
+    let mut file =
+        File::open(path).with_context(|| format!("Failed to open bundle at {:?}", path))?;
 
     let mut magic = [0u8; 4];
     let n = file.read(&mut magic)?;
@@ -337,6 +352,19 @@ fn is_text_file(path: &Path) -> bool {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     matches!(
         ext.to_lowercase().as_str(),
-        "md" | "json" | "jsonl" | "txt" | "py" | "rs" | "ts" | "js" | "sh" | "html" | "css" | "yml" | "yaml" | "toml" | "xml"
+        "md" | "json"
+            | "jsonl"
+            | "txt"
+            | "py"
+            | "rs"
+            | "ts"
+            | "js"
+            | "sh"
+            | "html"
+            | "css"
+            | "yml"
+            | "yaml"
+            | "toml"
+            | "xml"
     )
 }

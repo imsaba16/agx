@@ -104,7 +104,10 @@ fn test_security_verification_passed() {
     };
 
     let manifest = Bundler::export_bundle(&source_paths, summary, &export_opts).unwrap();
-    assert!(!manifest.checksums.is_empty(), "Manifest must include cryptographic checksums");
+    assert!(
+        !manifest.checksums.is_empty(),
+        "Manifest must include cryptographic checksums"
+    );
 
     // Verify bundle
     let report = Bundler::verify_bundle(&output_bundle).unwrap();
@@ -169,7 +172,9 @@ fn test_security_tampered_bundle_rejected() {
                 header.set_size(evil_data.len() as u64);
                 header.set_mode(0o644);
                 header.set_cksum();
-                builder.append_data(&mut header, "brain/plan.md", &evil_data[..]).unwrap();
+                builder
+                    .append_data(&mut header, "brain/plan.md", &evil_data[..])
+                    .unwrap();
             } else {
                 let mut data = Vec::new();
                 std::io::Read::read_to_end(&mut entry, &mut data).unwrap();
@@ -183,9 +188,15 @@ fn test_security_tampered_bundle_rejected() {
 
     // Verify report detects the mismatch
     let report = Bundler::verify_bundle(&tampered_bundle).unwrap();
-    assert!(!report.is_valid, "Tampered archive must fail integrity check");
     assert!(
-        report.mismatched_files.iter().any(|f| f.starts_with("brain/plan.md")),
+        !report.is_valid,
+        "Tampered archive must fail integrity check"
+    );
+    assert!(
+        report
+            .mismatched_files
+            .iter()
+            .any(|f| f.starts_with("brain/plan.md")),
         "Mismatched files must list brain/plan.md, got {:?}",
         report.mismatched_files
     );
@@ -207,7 +218,10 @@ fn test_security_tampered_bundle_rejected() {
     let result = Importer::import_bundle(&dest_paths, &import_opts);
     assert!(result.is_err(), "Importer must reject tampered bundle");
     let err_str = result.err().unwrap().to_string();
-    assert!(err_str.contains("Security check failed") || err_str.contains("Bundle integrity check failed"));
+    assert!(
+        err_str.contains("Security check failed")
+            || err_str.contains("Bundle integrity check failed")
+    );
 }
 
 #[test]
@@ -242,7 +256,9 @@ fn test_security_zip_slip_rejected() {
         manifest_header.set_size(manifest_bytes.len() as u64);
         manifest_header.set_mode(0o644);
         manifest_header.set_cksum();
-        builder.append_data(&mut manifest_header, "manifest.json", &manifest_bytes[..]).unwrap();
+        builder
+            .append_data(&mut manifest_header, "manifest.json", &manifest_bytes[..])
+            .unwrap();
 
         // Add malicious path traversal file bypassing builder.append_data by setting raw header bytes
         let evil_data = b"malicious payload";
@@ -261,7 +277,10 @@ fn test_security_zip_slip_rejected() {
     // Verify that Bundler::verify_bundle detects the Zip-Slip
     let report = Bundler::verify_bundle(&evil_bundle).unwrap();
     assert!(!report.is_valid, "Zip-Slip bundle must be marked invalid");
-    assert!(report.errors.iter().any(|e| e.contains("Path traversal") || e.contains("Zip-Slip")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("Path traversal") || e.contains("Zip-Slip")));
 
     // Verify that Importer rejects it before extraction
     let dest_paths = AntigravityPaths {
@@ -274,7 +293,10 @@ fn test_security_zip_slip_rejected() {
         dry_run: false,
     };
     let result = Importer::import_bundle(&dest_paths, &import_opts);
-    assert!(result.is_err(), "Importer must refuse to unpack zip slip archive");
+    assert!(
+        result.is_err(),
+        "Importer must refuse to unpack zip slip archive"
+    );
 }
 
 #[test]
@@ -308,7 +330,11 @@ fn test_project_security_verification_and_tampering() {
     // Create workspace customization
     let skill_dir = source_ws.join(".agents").join("skills").join("sec-skill");
     fs::create_dir_all(&skill_dir).unwrap();
-    fs::write(skill_dir.join("SKILL.md"), "---\nname: sec-skill\n---\nHardened Skill").unwrap();
+    fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: sec-skill\n---\nHardened Skill",
+    )
+    .unwrap();
 
     let output_bundle = source_ag_dir.path().join("project.agproject");
     let export_opts = ProjectExportOptions {
@@ -322,11 +348,17 @@ fn test_project_security_verification_and_tampering() {
     };
 
     let manifest = ProjectBundler::export_project_bundle(&source_paths, &export_opts).unwrap();
-    assert!(!manifest.checksums.is_empty(), "Project manifest must contain checksums");
+    assert!(
+        !manifest.checksums.is_empty(),
+        "Project manifest must contain checksums"
+    );
 
     // 1. Verify valid project bundle
     let report = ProjectBundler::verify_project_bundle(&output_bundle).unwrap();
-    assert!(report.is_valid, "Valid project bundle must pass verification");
+    assert!(
+        report.is_valid,
+        "Valid project bundle must pass verification"
+    );
     assert!(report.matched_checksums >= 2);
     assert_eq!(report.mismatched_files.len(), 0);
 
@@ -350,7 +382,9 @@ fn test_project_security_verification_and_tampering() {
                 header.set_size(evil_data.len() as u64);
                 header.set_mode(0o644);
                 header.set_cksum();
-                builder.append_data(&mut header, path, &evil_data[..]).unwrap();
+                builder
+                    .append_data(&mut header, path, &evil_data[..])
+                    .unwrap();
             } else {
                 let mut data = Vec::new();
                 std::io::Read::read_to_end(&mut entry, &mut data).unwrap();
@@ -364,9 +398,15 @@ fn test_project_security_verification_and_tampering() {
 
     // 3. Verify tampering detection
     let tampered_report = ProjectBundler::verify_project_bundle(&tampered_project).unwrap();
-    assert!(!tampered_report.is_valid, "Tampered project must fail verification");
     assert!(
-        tampered_report.mismatched_files.iter().any(|f| f.contains("SKILL.md")),
+        !tampered_report.is_valid,
+        "Tampered project must fail verification"
+    );
+    assert!(
+        tampered_report
+            .mismatched_files
+            .iter()
+            .any(|f| f.contains("SKILL.md")),
         "Mismatched files must list SKILL.md, got {:?}",
         tampered_report.mismatched_files
     );
@@ -388,6 +428,8 @@ fn test_project_security_verification_and_tampering() {
     };
 
     let import_res = ProjectImporter::import_project_bundle(&dest_paths, &import_opts);
-    assert!(import_res.is_err(), "ProjectImporter must reject tampered bundle");
+    assert!(
+        import_res.is_err(),
+        "ProjectImporter must reject tampered bundle"
+    );
 }
-

@@ -60,7 +60,9 @@ impl ProjectBundler {
                     .template("{spinner:.cyan} {msg}")
                     .unwrap_or_else(|_| indicatif::ProgressStyle::default_spinner()),
             );
-            s.set_message("Parallel-processing sessions, brain artifacts, and project customizations...");
+            s.set_message(
+                "Parallel-processing sessions, brain artifacts, and project customizations...",
+            );
             s.enable_steady_tick(std::time::Duration::from_millis(80));
             Some(s)
         } else {
@@ -163,7 +165,10 @@ impl ProjectBundler {
             for root in custom_roots {
                 if root.is_file() {
                     let rel = root.strip_prefix(ws_root)?;
-                    let tar_path = format!("customizations/{}", rel.to_string_lossy().replace('\\', "/"));
+                    let tar_path = format!(
+                        "customizations/{}",
+                        rel.to_string_lossy().replace('\\', "/")
+                    );
                     file_jobs.push((root.clone(), tar_path, true));
                 } else if root.is_dir() {
                     for entry in WalkDir::new(&root).into_iter().filter_map(|e| e.ok()) {
@@ -205,7 +210,11 @@ impl ProjectBundler {
 
                 let sha256 = crate::security::compute_sha256(&data);
 
-                Ok(ArchiveEntry { tar_path, data, sha256 })
+                Ok(ArchiveEntry {
+                    tar_path,
+                    data,
+                    sha256,
+                })
             })
             .collect();
 
@@ -236,8 +245,12 @@ impl ProjectBundler {
         };
 
         // Write Zstandard archive
-        let file = File::create(&options.output_path)
-            .with_context(|| format!("Failed to create output archive at {:?}", options.output_path))?;
+        let file = File::create(&options.output_path).with_context(|| {
+            format!(
+                "Failed to create output archive at {:?}",
+                options.output_path
+            )
+        })?;
         let zstd_enc = zstd::stream::write::Encoder::new(file, 3)?;
         let mut tar = Builder::new(zstd_enc);
 
@@ -269,7 +282,9 @@ impl ProjectBundler {
         Ok(manifest)
     }
 
-    pub fn verify_project_bundle(bundle_path: &Path) -> Result<crate::security::VerificationReport> {
+    pub fn verify_project_bundle(
+        bundle_path: &Path,
+    ) -> Result<crate::security::VerificationReport> {
         let manifest = Self::inspect_project_bundle(bundle_path)?;
         let mut archive = crate::bundler::open_archive(bundle_path)?;
 
@@ -292,13 +307,21 @@ impl ProjectBundler {
             let path_buf = entry.path()?.to_path_buf();
             let path_str = path_buf.to_string_lossy().replace('\\', "/");
 
-            if let Err(e) = crate::security::SafePathValidator::validate_and_resolve(Path::new("."), &path_buf) {
-                errors.push(format!("Path traversal vulnerability detected in entry '{}': {}", path_str, e));
+            if let Err(e) =
+                crate::security::SafePathValidator::validate_and_resolve(Path::new("."), &path_buf)
+            {
+                errors.push(format!(
+                    "Path traversal vulnerability detected in entry '{}': {}",
+                    path_str, e
+                ));
             }
 
             let entry_len = entry.header().size()?;
             if let Err(e) = limit_guard.check_and_add(entry_len) {
-                errors.push(format!("Resource limit breached in entry '{}': {}", path_str, e));
+                errors.push(format!(
+                    "Resource limit breached in entry '{}': {}",
+                    path_str, e
+                ));
             }
 
             if path_str == "project_manifest.json" {
@@ -370,6 +393,19 @@ fn is_text_file(path: &Path) -> bool {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     matches!(
         ext.to_lowercase().as_str(),
-        "md" | "json" | "jsonl" | "txt" | "py" | "rs" | "ts" | "js" | "sh" | "html" | "css" | "yml" | "yaml" | "toml" | "xml"
+        "md" | "json"
+            | "jsonl"
+            | "txt"
+            | "py"
+            | "rs"
+            | "ts"
+            | "js"
+            | "sh"
+            | "html"
+            | "css"
+            | "yml"
+            | "yaml"
+            | "toml"
+            | "xml"
     )
 }

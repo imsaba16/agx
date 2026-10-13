@@ -5,18 +5,14 @@ use std::path::{Path, PathBuf};
 /// Creates a clean, modern render configuration for `inquire` prompts.
 pub fn get_render_config() -> inquire::ui::RenderConfig<'static> {
     inquire::ui::RenderConfig {
-        prompt_prefix: inquire::ui::Styled::new("agx ❯")
-            .with_fg(inquire::ui::Color::DarkCyan),
+        prompt_prefix: inquire::ui::Styled::new("agx ❯").with_fg(inquire::ui::Color::DarkCyan),
         highlighted_option_prefix: inquire::ui::Styled::new("❯ ")
             .with_fg(inquire::ui::Color::DarkCyan),
         scroll_up_prefix: inquire::ui::Styled::new("▲"),
         scroll_down_prefix: inquire::ui::Styled::new("▼"),
-        selected_checkbox: inquire::ui::Styled::new("✔ ")
-            .with_fg(inquire::ui::Color::DarkGreen),
-        unselected_checkbox: inquire::ui::Styled::new("○ ")
-            .with_fg(inquire::ui::Color::DarkGrey),
-        help_message: inquire::ui::StyleSheet::new()
-            .with_fg(inquire::ui::Color::DarkGrey),
+        selected_checkbox: inquire::ui::Styled::new("✔ ").with_fg(inquire::ui::Color::DarkGreen),
+        unselected_checkbox: inquire::ui::Styled::new("○ ").with_fg(inquire::ui::Color::DarkGrey),
+        help_message: inquire::ui::StyleSheet::new().with_fg(inquire::ui::Color::DarkGrey),
         ..Default::default()
     }
 }
@@ -65,7 +61,11 @@ pub fn select_archive_file(prompt: &str) -> Result<Option<PathBuf>> {
         for p in &local_archives {
             let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
             let is_proj = filename.ends_with(".agproject");
-            let type_label = if is_proj { "Project Archive" } else { "Single Session" };
+            let type_label = if is_proj {
+                "Project Archive"
+            } else {
+                "Single Session"
+            };
             let size_kb = std::fs::metadata(p).map(|m| m.len() / 1024).unwrap_or(0);
 
             items.push(ArchiveItem {
@@ -91,7 +91,10 @@ pub fn select_archive_file(prompt: &str) -> Result<Option<PathBuf>> {
                 }
                 // Fallback to manual text input
             }
-            Err(inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted) => {
+            Err(
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted,
+            ) => {
                 return Ok(None);
             }
             Err(e) => return Err(anyhow::anyhow!("Selection error: {}", e)),
@@ -127,7 +130,12 @@ pub fn render_context_header(
         "agx".bold().cyan(),
         "─ Antigravity eXtension (v1.0.0-rc.1)".dimmed()
     );
-    println!("  {:<12} : {} ({})", "Workspace".dimmed(), ws_name.bold(), ws_display.dimmed());
+    println!(
+        "  {:<12} : {} ({})",
+        "Workspace".dimmed(),
+        ws_name.bold(),
+        ws_display.dimmed()
+    );
 
     if let Some(conv) = active_conversation {
         let title = if conv.title.trim().is_empty() {
@@ -160,5 +168,8 @@ pub fn render_context_header(
         "Sessions".dimmed(),
         total_workspace_sessions.to_string().cyan()
     );
-    println!("{}", "──────────────────────────────────────────────────────────────────".dimmed());
+    println!(
+        "{}",
+        "──────────────────────────────────────────────────────────────────".dimmed()
+    );
 }

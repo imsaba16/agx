@@ -73,7 +73,10 @@ impl ProjectImporter {
             } else if path_str.starts_with("customizations/") {
                 if options.restore_customizations {
                     let rel = path_buf.strip_prefix("customizations")?;
-                    let staged_dest = crate::security::SafePathValidator::validate_and_resolve(&staging_custom, rel)?;
+                    let staged_dest = crate::security::SafePathValidator::validate_and_resolve(
+                        &staging_custom,
+                        rel,
+                    )?;
 
                     if let Some(parent) = staged_dest.parent() {
                         fs::create_dir_all(parent)?;
@@ -96,7 +99,10 @@ impl ProjectImporter {
                 let parts: Vec<&str> = path_str.splitn(4, '/').collect();
                 if parts.len() >= 3 {
                     let orig_id = parts[1];
-                    let final_id = id_map.get(orig_id).cloned().unwrap_or_else(|| orig_id.to_string());
+                    let final_id = id_map
+                        .get(orig_id)
+                        .cloned()
+                        .unwrap_or_else(|| orig_id.to_string());
 
                     if parts[2] == "conversation.db" {
                         let staged_db = staging_sessions.join(&final_id).join("conversation.db");
@@ -107,7 +113,10 @@ impl ProjectImporter {
                     } else if parts[2] == "brain" && parts.len() == 4 {
                         let brain_rel = Path::new(parts[3]);
                         let staged_brain_dir = staging_sessions.join(&final_id).join("brain");
-                        let staged_dest = crate::security::SafePathValidator::validate_and_resolve(&staged_brain_dir, brain_rel)?;
+                        let staged_dest = crate::security::SafePathValidator::validate_and_resolve(
+                            &staged_brain_dir,
+                            brain_rel,
+                        )?;
 
                         if let Some(parent) = staged_dest.parent() {
                             fs::create_dir_all(parent)?;
@@ -136,7 +145,10 @@ impl ProjectImporter {
         // Commit sessions
         for conv in &manifest.conversations {
             let orig_id = &conv.conversation_id;
-            let final_id = id_map.get(orig_id).cloned().unwrap_or_else(|| orig_id.clone());
+            let final_id = id_map
+                .get(orig_id)
+                .cloned()
+                .unwrap_or_else(|| orig_id.clone());
 
             let staged_conv_dir = staging_sessions.join(&final_id);
             let staged_db = staged_conv_dir.join("conversation.db");
@@ -145,9 +157,8 @@ impl ProjectImporter {
                 if dest_db.exists() {
                     fs::remove_file(&dest_db)?;
                 }
-                fs::rename(&staged_db, &dest_db).or_else(|_| {
-                    fs::copy(&staged_db, &dest_db).map(|_| ())
-                })?;
+                fs::rename(&staged_db, &dest_db)
+                    .or_else(|_| fs::copy(&staged_db, &dest_db).map(|_| ()))?;
             }
 
             let staged_brain = staged_conv_dir.join("brain");
@@ -156,15 +167,17 @@ impl ProjectImporter {
                 if dest_brain.exists() {
                     fs::remove_dir_all(&dest_brain)?;
                 }
-                fs::rename(&staged_brain, &dest_brain).or_else(|_| {
-                    copy_dir_recursive(&staged_brain, &dest_brain)
-                })?;
+                fs::rename(&staged_brain, &dest_brain)
+                    .or_else(|_| copy_dir_recursive(&staged_brain, &dest_brain))?;
             }
         }
 
         // Commit customizations
         if options.restore_customizations && staging_custom.exists() {
-            for entry in walkdir::WalkDir::new(&staging_custom).into_iter().filter_map(|e| e.ok()) {
+            for entry in walkdir::WalkDir::new(&staging_custom)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
                 if entry.file_type().is_file() {
                     if let Ok(rel) = entry.path().strip_prefix(&staging_custom) {
                         let dest = target_ws.join(rel);
@@ -185,7 +198,10 @@ impl ProjectImporter {
             let db = Database::new(&paths.summaries_db());
             for conv in &manifest.conversations {
                 let orig_id = &conv.conversation_id;
-                let final_id = id_map.get(orig_id).cloned().unwrap_or_else(|| orig_id.clone());
+                let final_id = id_map
+                    .get(orig_id)
+                    .cloned()
+                    .unwrap_or_else(|| orig_id.clone());
 
                 let mut updated = conv.clone();
                 updated.conversation_id = final_id.clone();
@@ -207,7 +223,20 @@ fn is_text_file(path: &Path) -> bool {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     matches!(
         ext.to_lowercase().as_str(),
-        "md" | "json" | "jsonl" | "txt" | "py" | "rs" | "ts" | "js" | "sh" | "html" | "css" | "yml" | "yaml" | "toml" | "xml"
+        "md" | "json"
+            | "jsonl"
+            | "txt"
+            | "py"
+            | "rs"
+            | "ts"
+            | "js"
+            | "sh"
+            | "html"
+            | "css"
+            | "yml"
+            | "yaml"
+            | "toml"
+            | "xml"
     )
 }
 
@@ -225,4 +254,3 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     }
     Ok(())
 }
-

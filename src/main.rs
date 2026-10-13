@@ -260,7 +260,11 @@ fn main() -> Result<()> {
     let paths = AntigravityPaths::discover(cli.data_dir)?;
 
     match cli.command {
-        Some(Commands::List { workspace, limit, json }) => {
+        Some(Commands::List {
+            workspace,
+            limit,
+            json,
+        }) => {
             handle_list(&paths, workspace, limit, json)?;
         }
         Some(Commands::Export {
@@ -414,7 +418,9 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
 
     let db = Database::new(&paths.summaries_db());
     let (active_conv, ws_sessions_count) = if paths.summaries_db().exists() {
-        let ws_convs = db.find_conversations_for_workspace(&cwd).unwrap_or_default();
+        let ws_convs = db
+            .find_conversations_for_workspace(&cwd)
+            .unwrap_or_default();
         let count = ws_convs.len();
         let active = ws_convs.into_iter().next();
         (active, count)
@@ -527,7 +533,8 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 match compact_prompt {
                     Ok(choice) => {
                         let is_compact = choice.starts_with("Compact");
-                        let _ = handle_export(paths, None, None, None, true, is_compact, false, None);
+                        let _ =
+                            handle_export(paths, None, None, None, true, is_compact, false, None);
                     }
                     _ => continue,
                 }
@@ -546,7 +553,9 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 match compact_prompt {
                     Ok(choice) => {
                         let is_compact = choice.starts_with("Compact");
-                        let _ = handle_project_export(paths, None, None, is_compact, true, true, true, None);
+                        let _ = handle_project_export(
+                            paths, None, None, is_compact, true, true, true, None,
+                        );
                     }
                     _ => continue,
                 }
@@ -555,8 +564,11 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 let _ = handle_export(paths, None, None, None, true, false, true, None);
             }
             "diff" => {
-                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to compare:") {
-                    let _ = agx::diff::DiffEngine::diff_with_local(&archive_path, &cwd, paths, None);
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to compare:")
+                {
+                    let _ =
+                        agx::diff::DiffEngine::diff_with_local(&archive_path, &cwd, paths, None);
                 }
             }
             "search" => {
@@ -565,15 +577,19 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                     .prompt();
                 if let Ok(query) = query_ans {
                     if !query.trim().is_empty() {
-                        let mut hits = agx::search::SearchEngine::search_archives(query.trim(), &cwd, false)?;
-                        let local_hits = agx::search::SearchEngine::search_local(query.trim(), paths, false)?;
+                        let mut hits =
+                            agx::search::SearchEngine::search_archives(query.trim(), &cwd, false)?;
+                        let local_hits =
+                            agx::search::SearchEngine::search_local(query.trim(), paths, false)?;
                         hits.extend(local_hits);
                         agx::search::SearchEngine::print_hits(query.trim(), &hits);
                     }
                 }
             }
             "extract" => {
-                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to extract from:") {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to extract from:")
+                {
                     let pattern_choice = inquire::Select::new(
                         "Select file to extract:",
                         vec![
@@ -598,9 +614,12 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                     let extracted = agx::extract::Extractor::extract(&archive_path, pattern, None)?;
                     println!(
                         "\n{}",
-                        format!("✔ Successfully extracted {} file(s) into current folder:", extracted.len())
-                            .green()
-                            .bold()
+                        format!(
+                            "✔ Successfully extracted {} file(s) into current folder:",
+                            extracted.len()
+                        )
+                        .green()
+                        .bold()
                     );
                     for p in extracted {
                         println!("  - {:?}", p);
@@ -608,7 +627,9 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 }
             }
             "inspect" => {
-                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to inspect:") {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to inspect:")
+                {
                     if is_project_archive(&archive_path) {
                         let _ = handle_project_info(&archive_path, false);
                     } else {
@@ -617,15 +638,21 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 }
             }
             "verify" => {
-                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to verify:") {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to verify:")
+                {
                     let _ = handle_verify(&archive_path, false);
                 }
             }
             "import" => {
-                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to import:") {
-                    let ws_path_str = match inquire::Text::new("Target workspace path (press Enter for current folder):")
-                        .with_render_config(render_config)
-                        .prompt()
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to import:")
+                {
+                    let ws_path_str = match inquire::Text::new(
+                        "Target workspace path (press Enter for current folder):",
+                    )
+                    .with_render_config(render_config)
+                    .prompt()
                     {
                         Ok(s) => s.trim().to_string(),
                         _ => String::new(),
@@ -637,7 +664,14 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                     };
 
                     if is_project_archive(&archive_path) {
-                        let _ = handle_project_import(paths, archive_path, target_ws, false, true, false);
+                        let _ = handle_project_import(
+                            paths,
+                            archive_path,
+                            target_ws,
+                            false,
+                            true,
+                            false,
+                        );
                     } else {
                         let _ = handle_import(paths, archive_path, target_ws, false, false);
                     }
@@ -681,7 +715,9 @@ fn handle_list(
         .into_iter()
         .filter(|c| {
             if let Some(ref filter) = workspace_filter {
-                c.workspace_uris.to_lowercase().contains(&filter.to_lowercase())
+                c.workspace_uris
+                    .to_lowercase()
+                    .contains(&filter.to_lowercase())
             } else {
                 true
             }
@@ -810,7 +846,9 @@ fn select_conversation_interactively(
 
     match ans {
         Ok(selected) => Ok(selected.summary.clone()),
-        Err(inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted) => {
+        Err(
+            inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted,
+        ) => {
             println!("{}", "Export cancelled by user.".yellow());
             std::process::exit(0);
         }
@@ -853,31 +891,46 @@ fn handle_export(
         if let Some(conv) = matching {
             println!(
                 "{}",
-                format!("Auto-detected active conversation for current directory: {}", conv.title).green()
+                format!(
+                    "Auto-detected active conversation for current directory: {}",
+                    conv.title
+                )
+                .green()
             );
             (conv.conversation_id.clone(), conv)
         } else {
             let all = db.list_conversations()?;
             println!(
                 "{}",
-                "No active conversation matched current directory. Opening interactive picker...".yellow()
+                "No active conversation matched current directory. Opening interactive picker..."
+                    .yellow()
             );
             let selected = select_conversation_interactively(&all)?;
             (selected.conversation_id.clone(), selected)
         }
     };
 
-    let ws_root = workspace_root
-        .or_else(|| std::env::current_dir().ok());
+    let ws_root = workspace_root.or_else(|| std::env::current_dir().ok());
 
     let final_output = output_path.unwrap_or_else(|| {
         let sanitized_title: String = summary
             .title
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         let suffix = if compact { "_compact" } else { "" };
-        PathBuf::from(format!("{}{}_{}.agbundle", sanitized_title, suffix, &conv_id[..8]))
+        PathBuf::from(format!(
+            "{}{}_{}.agbundle",
+            sanitized_title,
+            suffix,
+            &conv_id[..8]
+        ))
     });
 
     let options = ExportOptions {
@@ -889,11 +942,28 @@ fn handle_export(
         custom_ignore_file: ignore_file,
     };
 
-    println!("\n{}", "● Packaging Session Archive (.agbundle)".bold().cyan());
+    println!(
+        "\n{}",
+        "● Packaging Session Archive (.agbundle)".bold().cyan()
+    );
     println!("  Title       : {}", summary.title.bold());
     println!("  ID          : {}", conv_id);
-    println!("  Sanitize    : {}", if sanitize { "YES (Masking secrets)".green() } else { "NO".yellow() });
-    println!("  Compact Mode: {}", if compact { "YES (Skipping raw step logs & heavy media)".green() } else { "NO (Full fidelity)".dimmed() });
+    println!(
+        "  Sanitize    : {}",
+        if sanitize {
+            "YES (Masking secrets)".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode: {}",
+        if compact {
+            "YES (Skipping raw step logs & heavy media)".green()
+        } else {
+            "NO (Full fidelity)".dimmed()
+        }
+    );
     if let Some(ref ws) = ws_root {
         println!("  Remap Root  : {:?}", ws);
     }
@@ -924,18 +994,57 @@ fn handle_info(bundle_path: &Path, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("\n{}", "=== Antigravity Bundle Information ===".bold().cyan());
+    println!(
+        "\n{}",
+        "=== Antigravity Bundle Information ===".bold().cyan()
+    );
     println!("  Bundle Version : {}", manifest.version.yellow());
     println!("  Created At     : {}", manifest.created_at.cyan());
-    println!("  Source Host    : {} ({})", manifest.source_username, manifest.source_os);
-    println!("  Sanitized      : {}", if manifest.sanitized { "YES".green() } else { "NO".yellow() });
-    println!("  Compact Mode   : {}", if manifest.compact { "YES".green() } else { "NO".dimmed() });
-    println!("  Artifacts Count: {}", manifest.artifacts_count.to_string().bold());
-    println!("  Excluded Count : {}", manifest.ignored_count.to_string().yellow());
-    println!("  Includes DB    : {}", if manifest.has_db { "YES".green() } else { "NO".red() });
+    println!(
+        "  Source Host    : {} ({})",
+        manifest.source_username, manifest.source_os
+    );
+    println!(
+        "  Sanitized      : {}",
+        if manifest.sanitized {
+            "YES".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode   : {}",
+        if manifest.compact {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  Artifacts Count: {}",
+        manifest.artifacts_count.to_string().bold()
+    );
+    println!(
+        "  Excluded Count : {}",
+        manifest.ignored_count.to_string().yellow()
+    );
+    println!(
+        "  Includes DB    : {}",
+        if manifest.has_db {
+            "YES".green()
+        } else {
+            "NO".red()
+        }
+    );
     println!("\n{}", "--- Conversation Details ---".bold());
-    println!("  Title          : {}", manifest.conversation.title.bold().white());
-    println!("  Original ID    : {}", manifest.conversation.conversation_id);
+    println!(
+        "  Title          : {}",
+        manifest.conversation.title.bold().white()
+    );
+    println!(
+        "  Original ID    : {}",
+        manifest.conversation.conversation_id
+    );
     println!("  Step Count     : {}", manifest.conversation.step_count);
     println!("  Original Roots : {:?}", manifest.original_workspace_paths);
     println!();
@@ -959,13 +1068,19 @@ fn handle_import(
 
     println!("\n{}", "● Importing Session Archive...".bold().cyan());
     if dry_run {
-        println!("{}", "MODE: DRY-RUN (No files will be modified)".yellow().bold());
+        println!(
+            "{}",
+            "MODE: DRY-RUN (No files will be modified)".yellow().bold()
+        );
     }
 
     let (imported_id, manifest) = Importer::import_bundle(paths, &options)?;
 
     println!("  Title           : {}", manifest.conversation.title.bold());
-    println!("  Original ID     : {}", manifest.conversation.conversation_id);
+    println!(
+        "  Original ID     : {}",
+        manifest.conversation.conversation_id
+    );
     println!("  Assigned ID     : {}", imported_id.cyan());
     if let Some(ref target_ws) = options.target_workspace {
         println!("  Bound Workspace : {:?}", target_ws);
@@ -973,7 +1088,10 @@ fn handle_import(
     println!("  Artifacts Count : {}", manifest.artifacts_count);
 
     if dry_run {
-        println!("\n{}", "Dry-run complete. Run without --dry-run to execute import.".green());
+        println!(
+            "\n{}",
+            "Dry-run complete. Run without --dry-run to execute import.".green()
+        );
     } else {
         println!(
             "\n{}",
@@ -1015,11 +1133,20 @@ fn handle_verify(bundle_path: &Path, json: bool) -> Result<()> {
     }
 
     println!("\n{}", "● AGX Security & Integrity Audit".bold().cyan());
-    println!("{}", "────────────────────────────────────────────────".dimmed());
+    println!(
+        "{}",
+        "────────────────────────────────────────────────".dimmed()
+    );
     println!("  Archive File   : {:?}", bundle_path);
     println!("  Archive Format : {}", archive_type.bold());
-    println!("  Files Checked  : {}", report.total_files_checked.to_string().cyan());
-    println!("  Valid Hashes   : {}", report.matched_checksums.to_string().green().bold());
+    println!(
+        "  Files Checked  : {}",
+        report.total_files_checked.to_string().cyan()
+    );
+    println!(
+        "  Valid Hashes   : {}",
+        report.matched_checksums.to_string().green().bold()
+    );
 
     if report.is_valid {
         println!("\n{}", "✔ INTEGRITY AUDIT PASSED".bold().green());
@@ -1030,13 +1157,23 @@ fn handle_verify(bundle_path: &Path, json: bool) -> Result<()> {
     } else {
         println!("\n{}", "✖ INTEGRITY AUDIT FAILED".bold().red());
         if !report.mismatched_files.is_empty() {
-            println!("\n{}", "  Mismatched Checksums (File Tampering Detected):".red().bold());
+            println!(
+                "\n{}",
+                "  Mismatched Checksums (File Tampering Detected):"
+                    .red()
+                    .bold()
+            );
             for f in &report.mismatched_files {
                 println!("    - {}", f.red());
             }
         }
         if !report.missing_files.is_empty() {
-            println!("\n{}", "  Missing Files (Declared in manifest but not found):".yellow().bold());
+            println!(
+                "\n{}",
+                "  Missing Files (Declared in manifest but not found):"
+                    .yellow()
+                    .bold()
+            );
             for f in &report.missing_files {
                 println!("    - {}", f.yellow());
             }
@@ -1112,21 +1249,29 @@ fn select_project_conversations_interactively(
         })
         .collect();
 
-    let ans = inquire::MultiSelect::new("Select conversations to include in project archive:", items)
-        .with_render_config(agx::ui::get_render_config())
-        .with_all_selected_by_default()
-        .with_page_size(15)
-        .with_help_message("Use Space to toggle, ↑/↓ to navigate, type to filter, Enter to confirm")
-        .prompt();
+    let ans =
+        inquire::MultiSelect::new("Select conversations to include in project archive:", items)
+            .with_render_config(agx::ui::get_render_config())
+            .with_all_selected_by_default()
+            .with_page_size(15)
+            .with_help_message(
+                "Use Space to toggle, ↑/↓ to navigate, type to filter, Enter to confirm",
+            )
+            .prompt();
 
     match ans {
         Ok(selected) => {
             if selected.is_empty() {
                 anyhow::bail!("At least one conversation must be selected.");
             }
-            Ok(selected.into_iter().map(|item| item.summary.conversation_id.clone()).collect())
+            Ok(selected
+                .into_iter()
+                .map(|item| item.summary.conversation_id.clone())
+                .collect())
         }
-        Err(inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted) => {
+        Err(
+            inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted,
+        ) => {
             println!("{}", "Project export cancelled by user.".yellow());
             std::process::exit(0);
         }
@@ -1171,9 +1316,8 @@ fn handle_project_export(
         .unwrap_or_else(|| "project".to_string());
 
     let suffix = if compact { "_compact" } else { "" };
-    let final_output = output.unwrap_or_else(|| {
-        PathBuf::from(format!("{}{}.agproject", project_name, suffix))
-    });
+    let final_output =
+        output.unwrap_or_else(|| PathBuf::from(format!("{}{}.agproject", project_name, suffix)));
 
     let options = ProjectExportOptions {
         workspace_root: ws_root.clone(),
@@ -1185,12 +1329,36 @@ fn handle_project_export(
         custom_ignore_file: ignore_file,
     };
 
-    println!("\n{}", "● Packaging Project Archive (.agproject)".bold().cyan());
+    println!(
+        "\n{}",
+        "● Packaging Project Archive (.agproject)".bold().cyan()
+    );
     println!("  Workspace Root : {:?}", ws_root);
     println!("  Project Name   : {}", project_name.bold());
-    println!("  Customizations : {}", if include_customizations { "YES (.agents/skills, rules, MCP)".green() } else { "NO (Skipped)".yellow() });
-    println!("  Sanitize       : {}", if sanitize { "YES (Masking secrets)".green() } else { "NO".yellow() });
-    println!("  Compact Mode   : {}", if compact { "YES (Skipping raw step logs & heavy media)".green() } else { "NO (Full fidelity)".dimmed() });
+    println!(
+        "  Customizations : {}",
+        if include_customizations {
+            "YES (.agents/skills, rules, MCP)".green()
+        } else {
+            "NO (Skipped)".yellow()
+        }
+    );
+    println!(
+        "  Sanitize       : {}",
+        if sanitize {
+            "YES (Masking secrets)".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode   : {}",
+        if compact {
+            "YES (Skipping raw step logs & heavy media)".green()
+        } else {
+            "NO (Full fidelity)".dimmed()
+        }
+    );
     println!("  Output File    : {:?}", final_output);
 
     let manifest = ProjectBundler::export_project_bundle(paths, &options)?;
@@ -1207,7 +1375,10 @@ fn handle_project_export(
         .green()
     );
     if manifest.customizations.has_skills {
-        println!("  Skills Included : {} skills", manifest.customizations.skills_count);
+        println!(
+            "  Skills Included : {} skills",
+            manifest.customizations.skills_count
+        );
     }
     if manifest.customizations.has_rules {
         println!("  Rules Included  : YES");
@@ -1228,23 +1399,82 @@ fn handle_project_info(bundle_path: &Path, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("\n{}", "=== Antigravity Project Bundle Information ===".bold().cyan());
-    println!("  Project Name   : {}", manifest.project_name.bold().white());
+    println!(
+        "\n{}",
+        "=== Antigravity Project Bundle Information ==="
+            .bold()
+            .cyan()
+    );
+    println!(
+        "  Project Name   : {}",
+        manifest.project_name.bold().white()
+    );
     println!("  Bundle Version : {}", manifest.version.yellow());
     println!("  Created At     : {}", manifest.created_at.cyan());
-    println!("  Source Host    : {} ({})", manifest.source_username, manifest.source_os);
+    println!(
+        "  Source Host    : {} ({})",
+        manifest.source_username, manifest.source_os
+    );
     println!("  Original Path  : {}", manifest.original_workspace_path);
-    println!("  Sanitized      : {}", if manifest.sanitized { "YES".green() } else { "NO".yellow() });
-    println!("  Compact Mode   : {}", if manifest.compact { "YES".green() } else { "NO".dimmed() });
-    println!("  Artifacts Count: {}", manifest.total_artifacts_count.to_string().bold());
-    println!("  Excluded Count : {}", manifest.total_ignored_count.to_string().yellow());
+    println!(
+        "  Sanitized      : {}",
+        if manifest.sanitized {
+            "YES".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode   : {}",
+        if manifest.compact {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  Artifacts Count: {}",
+        manifest.total_artifacts_count.to_string().bold()
+    );
+    println!(
+        "  Excluded Count : {}",
+        manifest.total_ignored_count.to_string().yellow()
+    );
 
     println!("\n{}", "--- Customizations Included ---".bold());
-    println!("  Skills : {}", if manifest.customizations.has_skills { format!("YES ({} skills)", manifest.customizations.skills_count).green() } else { "NO".dimmed() });
-    println!("  Rules  : {}", if manifest.customizations.has_rules { "YES".green() } else { "NO".dimmed() });
-    println!("  MCP    : {}", if manifest.customizations.has_mcp { "YES".green() } else { "NO".dimmed() });
+    println!(
+        "  Skills : {}",
+        if manifest.customizations.has_skills {
+            format!("YES ({} skills)", manifest.customizations.skills_count).green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  Rules  : {}",
+        if manifest.customizations.has_rules {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  MCP    : {}",
+        if manifest.customizations.has_mcp {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
 
-    println!("\n{}", format!("--- Packaged Conversations ({}) ---", manifest.conversations.len()).bold());
+    println!(
+        "\n{}",
+        format!(
+            "--- Packaged Conversations ({}) ---",
+            manifest.conversations.len()
+        )
+        .bold()
+    );
     for (i, conv) in manifest.conversations.iter().enumerate() {
         let title = if conv.title.trim().is_empty() {
             "Untitled Conversation"
@@ -1285,24 +1515,53 @@ fn handle_project_import(
         restore_customizations,
     };
 
-    println!("\n{}", "● Importing Project Archive (.agproject)...".bold().cyan());
+    println!(
+        "\n{}",
+        "● Importing Project Archive (.agproject)...".bold().cyan()
+    );
     if dry_run {
-        println!("{}", "MODE: DRY-RUN (No files will be modified)".yellow().bold());
+        println!(
+            "{}",
+            "MODE: DRY-RUN (No files will be modified)".yellow().bold()
+        );
     }
     println!("  Bundle File     : {:?}", bundle_path);
     println!("  Target Workspace: {:?}", target_ws);
-    println!("  Customizations  : {}", if restore_customizations { "YES (Restoring skills, rules, MCP)".green() } else { "NO (Skipped)".yellow() });
-    println!("  Overwrite       : {}", if overwrite { "YES".yellow() } else { "NO (Safe-forking collisions)".green() });
+    println!(
+        "  Customizations  : {}",
+        if restore_customizations {
+            "YES (Restoring skills, rules, MCP)".green()
+        } else {
+            "NO (Skipped)".yellow()
+        }
+    );
+    println!(
+        "  Overwrite       : {}",
+        if overwrite {
+            "YES".yellow()
+        } else {
+            "NO (Safe-forking collisions)".green()
+        }
+    );
 
     let (count, manifest) = ProjectImporter::import_project_bundle(paths, &options)?;
 
     println!("\n{}", "--- Import Summary ---".bold());
     println!("  Project Name         : {}", manifest.project_name.bold());
-    println!("  Conversations Mapped : {}", count.to_string().cyan().bold());
-    println!("  Total Artifacts      : {}", manifest.total_artifacts_count);
+    println!(
+        "  Conversations Mapped : {}",
+        count.to_string().cyan().bold()
+    );
+    println!(
+        "  Total Artifacts      : {}",
+        manifest.total_artifacts_count
+    );
 
     if dry_run {
-        println!("\n{}", "Dry-run complete. Run without --dry-run to execute import.".green());
+        println!(
+            "\n{}",
+            "Dry-run complete. Run without --dry-run to execute import.".green()
+        );
     } else {
         println!(
             "\n{}",
@@ -1318,4 +1577,3 @@ fn handle_project_import(
 
     Ok(())
 }
-

@@ -79,8 +79,16 @@ fn test_extract_and_cat_features() {
 
     let brain_dir = source_paths.conversation_brain(conv_id);
     fs::create_dir_all(&brain_dir).unwrap();
-    fs::write(brain_dir.join("implementation_plan.md"), "# Architecture Plan\n- Migrate Auth").unwrap();
-    fs::write(brain_dir.join("walkthrough.md"), "# Walkthrough\nTests passed").unwrap();
+    fs::write(
+        brain_dir.join("implementation_plan.md"),
+        "# Architecture Plan\n- Migrate Auth",
+    )
+    .unwrap();
+    fs::write(
+        brain_dir.join("walkthrough.md"),
+        "# Walkthrough\nTests passed",
+    )
+    .unwrap();
 
     let bundle_path = temp.path().join("extract_test.agbundle");
     let export_opts = ExportOptions {
@@ -96,7 +104,9 @@ fn test_extract_and_cat_features() {
 
     // 1. Test listing archive files
     let file_list = Extractor::list_files(&bundle_path).unwrap();
-    assert!(file_list.iter().any(|f| f.path.ends_with("implementation_plan.md")));
+    assert!(file_list
+        .iter()
+        .any(|f| f.path.ends_with("implementation_plan.md")));
 
     // 2. Test reading content into memory
     let (name, content) = Extractor::read_file_content(&bundle_path, "plan").unwrap();
@@ -126,7 +136,11 @@ fn test_diff_bundles() {
     let summary_a = mock_summary(conv_id_a, "Session A");
     let brain_a = source_paths.conversation_brain(conv_id_a);
     fs::create_dir_all(&brain_a).unwrap();
-    fs::write(brain_a.join("implementation_plan.md"), "# Plan A\n- Task 1\n- Task 2").unwrap();
+    fs::write(
+        brain_a.join("implementation_plan.md"),
+        "# Plan A\n- Task 1\n- Task 2",
+    )
+    .unwrap();
 
     let bundle_a = temp.path().join("bundle_a.agbundle");
     let export_opts_a = ExportOptions {
@@ -143,7 +157,11 @@ fn test_diff_bundles() {
     let summary_b = mock_summary(conv_id_b, "Session B");
     let brain_b = source_paths.conversation_brain(conv_id_b);
     fs::create_dir_all(&brain_b).unwrap();
-    fs::write(brain_b.join("implementation_plan.md"), "# Plan B\n- Task 1\n- Task 3 (Modified)").unwrap();
+    fs::write(
+        brain_b.join("implementation_plan.md"),
+        "# Plan B\n- Task 1\n- Task 3 (Modified)",
+    )
+    .unwrap();
 
     let bundle_b = temp.path().join("bundle_b.agbundle");
     let export_opts_b = ExportOptions {
@@ -173,7 +191,11 @@ fn test_zero_decompression_search() {
     let summary = mock_summary(conv_id, "Searchable Session");
     let brain = source_paths.conversation_brain(conv_id);
     fs::create_dir_all(&brain).unwrap();
-    fs::write(brain.join("notes.txt"), "Line 1\nCriticalStripeWebhookToken\nLine 3").unwrap();
+    fs::write(
+        brain.join("notes.txt"),
+        "Line 1\nCriticalStripeWebhookToken\nLine 3",
+    )
+    .unwrap();
 
     let bundle = temp.path().join("search_test.agbundle");
     let export_opts = ExportOptions {
@@ -187,7 +209,8 @@ fn test_zero_decompression_search() {
     Bundler::export_bundle(&source_paths, summary, &export_opts).unwrap();
 
     // Search inside the archive directory
-    let hits = SearchEngine::search_archives("CriticalStripeWebhookToken", temp.path(), false).unwrap();
+    let hits =
+        SearchEngine::search_archives("CriticalStripeWebhookToken", temp.path(), false).unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].line_number, 2);
     assert!(hits[0].line_content.contains("CriticalStripeWebhookToken"));

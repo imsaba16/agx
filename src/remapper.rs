@@ -15,7 +15,7 @@ impl PathRemapper {
     pub fn for_export(workspace_root: &Path) -> Self {
         let cleaned = clean_path(workspace_root);
         let fs_path = cleaned.to_string_lossy().to_string();
-        
+
         // Windows alternate slash variant (e.g. C:/Users/... vs C:\Users\...)
         let fs_path_alt = if cfg!(windows) || fs_path.contains('\\') {
             fs_path.replace('\\', "/")
@@ -39,7 +39,7 @@ impl PathRemapper {
     pub fn remap_export(&self, content: &str) -> String {
         let mut result = content.replace(&self.uri_path, WORKSPACE_URI_PLACEHOLDER);
         result = result.replace(&self.raw_uri_path, WORKSPACE_URI_PLACEHOLDER);
-        
+
         // Also try matching standard file:/// without extra slashes if different
         let alt_uri = format!("file://{}", self.fs_path_alt);
         if alt_uri != self.uri_path {
@@ -125,7 +125,8 @@ mod tests {
             raw_uri_path: "file:///Users/sanjays/project".to_string(),
         };
 
-        let mac_text = "See file:///Users/sanjays/project/src/main.rs and /Users/sanjays/project/Cargo.toml";
+        let mac_text =
+            "See file:///Users/sanjays/project/src/main.rs and /Users/sanjays/project/Cargo.toml";
         let exported = remapper.remap_export(mac_text);
 
         assert_eq!(
@@ -157,7 +158,10 @@ mod tests {
         let exported = remapper.remap_export(win_text);
 
         assert!(exported.contains("file://{{WORKSPACE_ROOT}}/src/main.rs"));
-        assert!(exported.contains("{{WORKSPACE_ROOT}}\\Cargo.toml") || exported.contains("{{WORKSPACE_ROOT}}/Cargo.toml"));
+        assert!(
+            exported.contains("{{WORKSPACE_ROOT}}\\Cargo.toml")
+                || exported.contains("{{WORKSPACE_ROOT}}/Cargo.toml")
+        );
 
         // Simulate importing on Linux
         let linux_target = PathBuf::from("/home/bob/project");

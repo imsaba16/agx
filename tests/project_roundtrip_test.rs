@@ -127,20 +127,35 @@ fn test_project_export_import_roundtrip() {
     fs::create_dir_all(&brain2).unwrap();
     fs::write(
         brain2.join("walkthrough.md"),
-        format!("# Walkthrough 2\nFixed bug in file://{}/src/lib.rs\n", source_ws_str),
-    ).unwrap();
+        format!(
+            "# Walkthrough 2\nFixed bug in file://{}/src/lib.rs\n",
+            source_ws_str
+        ),
+    )
+    .unwrap();
 
     // 4. Create mock project customizations in source workspace
-    let skills_dir = source_ws.join(".agents").join("skills").join("super-helper");
+    let skills_dir = source_ws
+        .join(".agents")
+        .join("skills")
+        .join("super-helper");
     fs::create_dir_all(&skills_dir).unwrap();
-    fs::write(skills_dir.join("SKILL.md"), format!("name: super-helper\npath: {}\n", source_ws_str)).unwrap();
+    fs::write(
+        skills_dir.join("SKILL.md"),
+        format!("name: super-helper\npath: {}\n", source_ws_str),
+    )
+    .unwrap();
 
     let rules_dir = source_ws.join(".agents").join("rules");
     fs::create_dir_all(&rules_dir).unwrap();
     fs::write(rules_dir.join("rules.md"), "# Code Rules\nClean code.").unwrap();
 
     let mcp_file = source_ws.join(".agents").join("mcp_config.json");
-    fs::write(&mcp_file, r#"{"mcpServers": {"test": {"command": "node"}}}"#).unwrap();
+    fs::write(
+        &mcp_file,
+        r#"{"mcpServers": {"test": {"command": "node"}}}"#,
+    )
+    .unwrap();
 
     // 5. Export project bundle
     let bundle_file = source_ag_dir.path().join("my_test_project.agproject");
@@ -188,7 +203,8 @@ fn test_project_export_import_roundtrip() {
         restore_customizations: true,
     };
 
-    let (dry_count, _) = ProjectImporter::import_project_bundle(&target_paths, &dry_run_options).unwrap();
+    let (dry_count, _) =
+        ProjectImporter::import_project_bundle(&target_paths, &dry_run_options).unwrap();
     assert_eq!(dry_count, 2);
     assert!(!target_ws.join(".agents").exists()); // nothing written in dry run
 
@@ -201,7 +217,8 @@ fn test_project_export_import_roundtrip() {
         restore_customizations: true,
     };
 
-    let (imported_count, _) = ProjectImporter::import_project_bundle(&target_paths, &import_options).unwrap();
+    let (imported_count, _) =
+        ProjectImporter::import_project_bundle(&target_paths, &import_options).unwrap();
     assert_eq!(imported_count, 2);
 
     // Verify DB restored
@@ -216,7 +233,12 @@ fn test_project_export_import_roundtrip() {
     }
 
     // Verify brain files restored and sanitized + remapped
-    let plan1 = fs::read_to_string(target_paths.conversation_brain(conv1_id).join("implementation_plan.md")).unwrap();
+    let plan1 = fs::read_to_string(
+        target_paths
+            .conversation_brain(conv1_id)
+            .join("implementation_plan.md"),
+    )
+    .unwrap();
     assert!(plan1.contains(&format!("file://{}/src/app.rs", target_ws_str)));
     assert!(!plan1.contains(&source_ws_str));
     // Verify secret sanitization worked
@@ -224,19 +246,31 @@ fn test_project_export_import_roundtrip() {
     assert!(!plan1.contains("sk-proj-1234567890abcdef12345678"));
 
     // Verify customizations restored in target workspace
-    let restored_skill = target_ws.join(".agents").join("skills").join("super-helper").join("SKILL.md");
+    let restored_skill = target_ws
+        .join(".agents")
+        .join("skills")
+        .join("super-helper")
+        .join("SKILL.md");
     assert!(restored_skill.exists());
     let skill_text = fs::read_to_string(restored_skill).unwrap();
     assert!(skill_text.contains(&target_ws_str));
 
-    assert!(target_ws.join(".agents").join("rules").join("rules.md").exists());
+    assert!(target_ws
+        .join(".agents")
+        .join("rules")
+        .join("rules.md")
+        .exists());
     assert!(target_ws.join(".agents").join("mcp_config.json").exists());
 
     // 9. Verify safe-forking when destination already has colliding conversation IDs
-    let (fork_count, _) = ProjectImporter::import_project_bundle(&target_paths, &import_options).unwrap();
+    let (fork_count, _) =
+        ProjectImporter::import_project_bundle(&target_paths, &import_options).unwrap();
     assert_eq!(fork_count, 2);
     let after_fork = target_db.list_conversations().unwrap();
     assert_eq!(after_fork.len(), 4); // 2 original + 2 safely forked with new UUIDs!
-    let forked = after_fork.iter().filter(|c| c.title.contains("(Imported)")).count();
+    let forked = after_fork
+        .iter()
+        .filter(|c| c.title.contains("(Imported)"))
+        .count();
     assert_eq!(forked, 2);
 }

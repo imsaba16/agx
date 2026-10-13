@@ -134,12 +134,15 @@ fn test_full_export_import_roundtrip() {
         dry_run: false,
     };
 
-    let (imported_id, _imported_manifest) = Importer::import_bundle(&dest_paths, &import_options).unwrap();
+    let (imported_id, _imported_manifest) =
+        Importer::import_bundle(&dest_paths, &import_options).unwrap();
     assert_eq!(imported_id, conv_id);
 
     // 5. Verify restored artifacts and path remapping
     let restored_plan = fs::read_to_string(
-        dest_paths.conversation_brain(&imported_id).join("implementation_plan.md"),
+        dest_paths
+            .conversation_brain(&imported_id)
+            .join("implementation_plan.md"),
     )
     .unwrap();
 

@@ -68,7 +68,8 @@ impl Importer {
                 has_conv_db = true;
             } else if path_str.starts_with("brain/") {
                 let rel = path_buf.strip_prefix("brain")?;
-                let dest_file_path = crate::security::SafePathValidator::validate_and_resolve(&staging_brain, rel)?;
+                let dest_file_path =
+                    crate::security::SafePathValidator::validate_and_resolve(&staging_brain, rel)?;
 
                 if let Some(parent) = dest_file_path.parent() {
                     fs::create_dir_all(parent)?;
@@ -111,9 +112,8 @@ impl Importer {
             if dest_db_path.exists() {
                 fs::remove_file(&dest_db_path)?;
             }
-            fs::rename(&staging_conv_db, &dest_db_path).or_else(|_| {
-                fs::copy(&staging_conv_db, &dest_db_path).map(|_| ())
-            })?;
+            fs::rename(&staging_conv_db, &dest_db_path)
+                .or_else(|_| fs::copy(&staging_conv_db, &dest_db_path).map(|_| ()))?;
         }
 
         // 5. Update database
@@ -124,8 +124,10 @@ impl Importer {
                 updated_summary.title = format!("{} (Imported)", updated_summary.title);
             }
             if let Some(ref target_ws) = options.target_workspace {
-                updated_summary.workspace_uris =
-                    PathRemapper::remap_workspace_uris_import(&updated_summary.workspace_uris, target_ws);
+                updated_summary.workspace_uris = PathRemapper::remap_workspace_uris_import(
+                    &updated_summary.workspace_uris,
+                    target_ws,
+                );
             }
 
             let db = Database::new(&paths.summaries_db());
@@ -140,7 +142,20 @@ fn is_text_path(path: &Path) -> bool {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     matches!(
         ext.to_lowercase().as_str(),
-        "md" | "json" | "jsonl" | "txt" | "py" | "rs" | "ts" | "js" | "sh" | "html" | "css" | "yml" | "yaml" | "toml" | "xml"
+        "md" | "json"
+            | "jsonl"
+            | "txt"
+            | "py"
+            | "rs"
+            | "ts"
+            | "js"
+            | "sh"
+            | "html"
+            | "css"
+            | "yml"
+            | "yaml"
+            | "toml"
+            | "xml"
     )
 }
 
@@ -158,4 +173,3 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     }
     Ok(())
 }
-

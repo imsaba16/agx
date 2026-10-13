@@ -13,8 +13,7 @@ impl AntigravityPaths {
         } else if let Ok(env_dir) = std::env::var("ANTIGRAVITY_HOME") {
             PathBuf::from(env_dir)
         } else {
-            let home = dirs::home_dir()
-                .context("Could not determine user home directory")?;
+            let home = dirs::home_dir().context("Could not determine user home directory")?;
             let standard_path = home.join(".gemini").join("antigravity");
 
             // On Windows, check both %USERPROFILE%/.gemini/antigravity and %APPDATA%/Gemini/antigravity
@@ -55,7 +54,8 @@ impl AntigravityPaths {
     }
 
     pub fn conversation_db(&self, conversation_id: &str) -> PathBuf {
-        self.conversations_dir().join(format!("{}.db", conversation_id))
+        self.conversations_dir()
+            .join(format!("{}.db", conversation_id))
     }
 
     pub fn conversation_brain(&self, conversation_id: &str) -> PathBuf {

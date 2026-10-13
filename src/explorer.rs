@@ -169,11 +169,22 @@ pub fn run_explorer(paths: &AntigravityPaths) -> Result<()> {
 
             // 1. Header
             let header_text = vec![Line::from(vec![
-                Span::styled("agx ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                Span::styled("─ Split-Pane Session Explorer & Markdown Inspector", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    "agx ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "─ Split-Pane Session Explorer & Markdown Inspector",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ])];
-            let header = Paragraph::new(header_text)
-                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+            let header = Paragraph::new(header_text).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+            );
             f.render_widget(header, chunks[0]);
 
             // 2. Main split (Left: Sessions list 40%, Right: Markdown preview 60%)
@@ -204,17 +215,26 @@ pub fn run_explorer(paths: &AntigravityPaths) -> Result<()> {
                             Span::styled(format!("[{}] ", date), Style::default().fg(Color::Cyan)),
                             Span::styled(title, Style::default().add_modifier(Modifier::BOLD)),
                         ]),
-                        Line::from(vec![
-                            Span::styled(format!("  {} steps", conv.step_count), Style::default().fg(Color::DarkGray)),
-                        ]),
+                        Line::from(vec![Span::styled(
+                            format!("  {} steps", conv.step_count),
+                            Style::default().fg(Color::DarkGray),
+                        )]),
                     ])
                 })
                 .collect();
 
             let list_title = if app.in_filter_mode {
-                format!("Sessions ({}) [Filter: {}_]", app.filtered_indices.len(), app.filter_query)
+                format!(
+                    "Sessions ({}) [Filter: {}_]",
+                    app.filtered_indices.len(),
+                    app.filter_query
+                )
             } else if !app.filter_query.is_empty() {
-                format!("Sessions ({}) [Filtered: {}]", app.filtered_indices.len(), app.filter_query)
+                format!(
+                    "Sessions ({}) [Filtered: {}]",
+                    app.filtered_indices.len(),
+                    app.filter_query
+                )
             } else {
                 format!("Sessions ({})", app.filtered_indices.len())
             };
@@ -244,18 +264,37 @@ pub fn run_explorer(paths: &AntigravityPaths) -> Result<()> {
             let preview_content = app.load_active_preview();
             let preview_title = app
                 .current_selected_summary()
-                .map(|c| format!("Preview: {}", if c.title.trim().is_empty() { "Session" } else { &c.title }))
+                .map(|c| {
+                    format!(
+                        "Preview: {}",
+                        if c.title.trim().is_empty() {
+                            "Session"
+                        } else {
+                            &c.title
+                        }
+                    )
+                })
                 .unwrap_or_else(|| "Preview".to_string());
 
             let preview_widget = Paragraph::new(preview_content)
-                .block(Block::default().title(preview_title).borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)))
+                .block(
+                    Block::default()
+                        .title(preview_title)
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::DarkGray)),
+                )
                 .wrap(Wrap { trim: false });
             f.render_widget(preview_widget, main_chunks[1]);
 
             // 3. Footer / Status
             let controls = if app.in_filter_mode {
                 Line::from(vec![
-                    Span::styled("FILTER MODE: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "FILTER MODE: ",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Type search query, Enter/Esc to confirm"),
                 ])
             } else {
@@ -268,12 +307,18 @@ pub fn run_explorer(paths: &AntigravityPaths) -> Result<()> {
                     Span::raw("Extract Plan  "),
                     Span::styled("[q] ", Style::default().fg(Color::Cyan)),
                     Span::raw("Quit  "),
-                    Span::styled(format!("│ {}", app.status_message), Style::default().fg(Color::Green)),
+                    Span::styled(
+                        format!("│ {}", app.status_message),
+                        Style::default().fg(Color::Green),
+                    ),
                 ])
             };
 
-            let footer = Paragraph::new(controls)
-                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+            let footer = Paragraph::new(controls).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+            );
             f.render_widget(footer, chunks[2]);
         })?;
 
@@ -313,15 +358,19 @@ pub fn run_explorer(paths: &AntigravityPaths) -> Result<()> {
                             }
                             KeyCode::Char('x') => {
                                 if let Some(conv) = app.current_selected_summary() {
-                                    let brain_dir = app.paths.conversation_brain(&conv.conversation_id);
+                                    let brain_dir =
+                                        app.paths.conversation_brain(&conv.conversation_id);
                                     let plan_file = brain_dir.join("implementation_plan.md");
                                     if plan_file.exists() {
-                                        let out_name = format!("{}_plan.md", &conv.conversation_id[..8]);
+                                        let out_name =
+                                            format!("{}_plan.md", &conv.conversation_id[..8]);
                                         let out_path = PathBuf::from(&out_name);
                                         if fs::copy(&plan_file, &out_path).is_ok() {
-                                            app.status_message = format!("✔ Saved to {:?}", out_name);
+                                            app.status_message =
+                                                format!("✔ Saved to {:?}", out_name);
                                         } else {
-                                            app.status_message = "✖ Failed to copy plan".to_string();
+                                            app.status_message =
+                                                "✖ Failed to copy plan".to_string();
                                         }
                                     } else {
                                         app.status_message = "✖ No plan file exists".to_string();

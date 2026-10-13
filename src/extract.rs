@@ -51,7 +51,8 @@ impl Extractor {
                 || (pattern == "plan" && path_lower.ends_with("implementation_plan.md"))
                 || (pattern == "walkthrough" && path_lower.ends_with("walkthrough.md"))
                 || (pattern == "transcript" && path_lower.ends_with("transcript.jsonl"))
-                || (pattern == "manifest" && (path_str == "manifest.json" || path_str == "project_manifest.json"));
+                || (pattern == "manifest"
+                    && (path_str == "manifest.json" || path_str == "project_manifest.json"));
 
             if is_match {
                 let mut content = Vec::new();
@@ -94,7 +95,8 @@ impl Extractor {
                     || (pat == "plan" && path_lower.ends_with("implementation_plan.md"))
                     || (pat == "walkthrough" && path_lower.ends_with("walkthrough.md"))
                     || (pat == "transcript" && path_lower.ends_with("transcript.jsonl"))
-                    || (pat == "manifest" && (path_str == "manifest.json" || path_str == "project_manifest.json"))
+                    || (pat == "manifest"
+                        && (path_str == "manifest.json" || path_str == "project_manifest.json"))
             } else {
                 true
             };

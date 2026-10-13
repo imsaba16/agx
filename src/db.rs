@@ -16,7 +16,9 @@ impl Database {
 
     fn open_read_only(&self) -> Result<Connection> {
         let conn = Connection::open_with_flags(&self.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .with_context(|| format!("Failed to open database at {:?} (read-only)", self.db_path))?;
+            .with_context(|| {
+                format!("Failed to open database at {:?} (read-only)", self.db_path)
+            })?;
         let _ = conn.execute_batch("PRAGMA busy_timeout = 5000;");
         Ok(conn)
     }
@@ -77,7 +79,10 @@ impl Database {
         Ok(results)
     }
 
-    pub fn find_conversations_for_workspace(&self, workspace_path: &Path) -> Result<Vec<ConversationSummary>> {
+    pub fn find_conversations_for_workspace(
+        &self,
+        workspace_path: &Path,
+    ) -> Result<Vec<ConversationSummary>> {
         let raw_path = workspace_path.to_path_buf();
         let cleaned = crate::remapper::clean_path(workspace_path);
 
@@ -103,9 +108,7 @@ impl Database {
         let all = self.list_conversations()?;
         let filtered = all
             .into_iter()
-            .filter(|c| {
-                all_terms.iter().any(|term| c.workspace_uris.contains(term))
-            })
+            .filter(|c| all_terms.iter().any(|term| c.workspace_uris.contains(term)))
             .collect();
 
         Ok(filtered)

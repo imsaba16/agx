@@ -26,8 +26,16 @@ impl DiffEngine {
         let text_a = String::from_utf8_lossy(&bytes_a);
         let text_b = String::from_utf8_lossy(&bytes_b);
 
-        let label_a = format!("{:?} ({})", bundle_a.file_name().unwrap_or_default(), path_a);
-        let label_b = format!("{:?} ({})", bundle_b.file_name().unwrap_or_default(), path_b);
+        let label_a = format!(
+            "{:?} ({})",
+            bundle_a.file_name().unwrap_or_default(),
+            path_a
+        );
+        let label_b = format!(
+            "{:?} ({})",
+            bundle_b.file_name().unwrap_or_default(),
+            path_b
+        );
 
         Self::print_diff(&text_a, &text_b, &label_a, &label_b);
 
@@ -50,8 +58,15 @@ impl DiffEngine {
         // Try finding local active session for this workspace
         let local_text = Self::find_local_content(workspace_dir, paths, pattern)?;
 
-        let label_a = format!("{:?} ({})", bundle.file_name().unwrap_or_default(), bundle_path);
-        let label_b = format!("Local Workspace ({:?})", workspace_dir.file_name().unwrap_or_default());
+        let label_a = format!(
+            "{:?} ({})",
+            bundle.file_name().unwrap_or_default(),
+            bundle_path
+        );
+        let label_b = format!(
+            "Local Workspace ({:?})",
+            workspace_dir.file_name().unwrap_or_default()
+        );
 
         Self::print_diff(&bundle_text, &local_text, &label_a, &label_b);
 
@@ -101,7 +116,10 @@ impl DiffEngine {
             "● Context Diff:".bold().cyan(),
             format!("{} ↔ {}", label_a, label_b).white().bold()
         );
-        println!("{}", "──────────────────────────────────────────────────────────────────".dimmed());
+        println!(
+            "{}",
+            "──────────────────────────────────────────────────────────────────".dimmed()
+        );
 
         let diff = TextDiff::from_lines(text_a, text_b);
 
@@ -125,9 +143,17 @@ impl DiffEngine {
         }
 
         println!();
-        println!("{}", "──────────────────────────────────────────────────────────────────".dimmed());
+        println!(
+            "{}",
+            "──────────────────────────────────────────────────────────────────".dimmed()
+        );
         if additions == 0 && deletions == 0 {
-            println!("{}", "✔ Files are identical (zero changes detected).".green().bold());
+            println!(
+                "{}",
+                "✔ Files are identical (zero changes detected)."
+                    .green()
+                    .bold()
+            );
         } else {
             println!(
                 "Diff Stats: {} lines added, {} lines removed",

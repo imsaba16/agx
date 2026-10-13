@@ -105,14 +105,28 @@ impl SearchEngine {
             query.to_lowercase()
         };
 
-        for entry_res in walkdir::WalkDir::new(&brain_dir).into_iter().filter_map(|e| e.ok()) {
+        for entry_res in walkdir::WalkDir::new(&brain_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             if entry_res.file_type().is_file() {
                 let path = entry_res.path();
                 if is_searchable_text(path) {
                     if let Ok(rel) = path.strip_prefix(&brain_dir) {
-                        let conv_id = rel.components().next().map(|c| c.as_os_str().to_string_lossy().to_string()).unwrap_or_default();
-                        let title = titles_map.get(&conv_id).cloned().unwrap_or_else(|| conv_id.clone());
-                        let inner_rel = rel.strip_prefix(&conv_id).unwrap_or(rel).to_string_lossy().replace('\\', "/");
+                        let conv_id = rel
+                            .components()
+                            .next()
+                            .map(|c| c.as_os_str().to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        let title = titles_map
+                            .get(&conv_id)
+                            .cloned()
+                            .unwrap_or_else(|| conv_id.clone());
+                        let inner_rel = rel
+                            .strip_prefix(&conv_id)
+                            .unwrap_or(rel)
+                            .to_string_lossy()
+                            .replace('\\', "/");
 
                         if let Ok(file) = fs::File::open(path) {
                             let reader = BufReader::new(file);
@@ -126,7 +140,11 @@ impl SearchEngine {
 
                                     if matches {
                                         hits.push(SearchHit {
-                                            location: format!("{} [{}]", title, &conv_id[..conv_id.len().min(8)]),
+                                            location: format!(
+                                                "{} [{}]",
+                                                title,
+                                                &conv_id[..conv_id.len().min(8)]
+                                            ),
                                             inner_file: inner_rel.clone(),
                                             line_number: idx + 1,
                                             line_content: line.trim().to_string(),
@@ -152,7 +170,10 @@ impl SearchEngine {
             hits.len().to_string().green().bold(),
             query.yellow().bold()
         );
-        println!("{}", "──────────────────────────────────────────────────────────────────".dimmed());
+        println!(
+            "{}",
+            "──────────────────────────────────────────────────────────────────".dimmed()
+        );
 
         if hits.is_empty() {
             println!("{}", "No occurrences found.".dimmed());
@@ -164,7 +185,11 @@ impl SearchEngine {
         for hit in hits {
             if hit.location != current_loc {
                 current_loc = hit.location.clone();
-                println!("\n  {} ── {}", current_loc.bold().white(), hit.inner_file.dimmed());
+                println!(
+                    "\n  {} ── {}",
+                    current_loc.bold().white(),
+                    hit.inner_file.dimmed()
+                );
             }
 
             let highlighted = highlight_substring(&hit.line_content, query);
@@ -196,6 +221,19 @@ fn is_searchable_text(path: &Path) -> bool {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     matches!(
         ext.to_lowercase().as_str(),
-        "md" | "json" | "jsonl" | "txt" | "py" | "rs" | "ts" | "js" | "sh" | "html" | "css" | "yml" | "yaml" | "toml" | "xml"
+        "md" | "json"
+            | "jsonl"
+            | "txt"
+            | "py"
+            | "rs"
+            | "ts"
+            | "js"
+            | "sh"
+            | "html"
+            | "css"
+            | "yml"
+            | "yaml"
+            | "toml"
+            | "xml"
     )
 }
