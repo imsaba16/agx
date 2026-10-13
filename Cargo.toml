@@ -6,6 +6,8 @@ authors = ["Antigravity Developers"]
 description = "agx: Antigravity eXtension — Enterprise context exchange, session diffing, zero-decompression search, and backup engine for Google Antigravity."
 license = "Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/imsaba16/agx"
+homepage = "https://github.com/imsaba16/agx"
 keywords = ["antigravity", "ai-agents", "context-exchange", "developer-tools", "backup"]
 categories = ["command-line-utilities", "development-tools"]
 

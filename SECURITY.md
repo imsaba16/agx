@@ -20,8 +20,8 @@ Only the latest release candidate and stable major releases receive active secur
 If you discover a security vulnerability in `agx`, **please do not open a public issue.** Public disclosure puts users and developer environments at risk.
 
 Instead, report security vulnerabilities through:
-- **GitHub Security Advisory**: [Create a private advisory](https://github.com/sanjays/antigravity-backup/security/advisories/new)
-- **Security Email**: Contact the security maintainers at `security@antigravity.dev` or `sanjays@antigravity.dev`.
+- **GitHub Security Advisory**: [Create a private advisory](https://github.com/imsaba16/agx/security/advisories/new)
+- **Security Email**: Contact the security maintainers at `security@antigravity.dev` or `imsaba16@gmail.com`.
 
 ### What to Include in Your Report
 

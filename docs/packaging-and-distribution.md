@@ -32,12 +32,12 @@ Homebrew is the standard package manager on macOS and is widely used on Linux vi
 
 A custom tap allows users to install `agx` immediately via:
 ```bash
-brew tap <your-github-username>/agx
+brew tap imsaba16/agx
 brew install agx
 ```
 or in a single command:
 ```bash
-brew install <your-github-username>/agx/agx
+brew install imsaba16/agx/agx
 ```
 
 #### Step 1: Create the Tap Repository
@@ -51,23 +51,23 @@ Add the following Ruby formula file:
 ```ruby
 class Agx < Formula
   desc "Context exchange, session diffing, search, and backup engine for Google Antigravity"
-  homepage "https://github.com/<your-username>/antigravity-backup"
+  homepage "https://github.com/imsaba16/agx"
   version "1.0.0-rc.1"
   license "Apache-2.0"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/<your-username>/antigravity-backup/releases/download/v#{version}/agx-macos-arm64.tar.gz"
+      url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-arm64.tar.gz"
       sha256 "<SHA256_OF_MACOS_ARM64_TAR_GZ>"
     else
-      url "https://github.com/<your-username>/antigravity-backup/releases/download/v#{version}/agx-macos-x86_64.tar.gz"
+      url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-x86_64.tar.gz"
       sha256 "<SHA256_OF_MACOS_X86_64_TAR_GZ>"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/<your-username>/antigravity-backup/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
+      url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
       sha256 "<SHA256_OF_LINUX_X86_64_TAR_GZ>"
     end
   end
@@ -96,11 +96,11 @@ To automatically update `Formula/agx.rb` whenever you push a new release tag:
   uses: mislav/bump-homebrew-formula-action@v3
   with:
     formula-name: agx
-    homebrew-tap: <your-username>/homebrew-agx
+    homebrew-tap: imsaba16/homebrew-agx
     base-branch: main
-    download-url: https://github.com/<your-username>/antigravity-backup/releases/download/${{ github.ref_name }}/agx-macos-arm64.tar.gz
+    download-url: https://github.com/imsaba16/agx/releases/download/${{ github.ref_name }}/agx-macos-arm64.tar.gz
   env:
-    COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    COMMITTER_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 ```
 
 ---
@@ -113,23 +113,23 @@ Scoop installs command-line programs to the user's home directory without UAC ad
 
 #### Installation Command for Users:
 ```powershell
-scoop bucket add agx https://github.com/<your-username>/scoop-bucket
+scoop bucket add agx https://github.com/imsaba16/scoop-bucket
 scoop install agx
 ```
 
 #### Setup:
-1. Create a repository named `scoop-bucket` on GitHub.
+1. In your `imsaba16/scoop-bucket` repository:
 2. Inside `bucket/agx.json`:
 
 ```json
 {
   "version": "1.0.0-rc.1",
   "description": "Context exchange, session diffing, search, and backup engine for Google Antigravity",
-  "homepage": "https://github.com/<your-username>/antigravity-backup",
+  "homepage": "https://github.com/imsaba16/agx",
   "license": "Apache-2.0",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/<your-username>/antigravity-backup/releases/download/v1.0.0-rc.1/agx-windows-x86_64.zip",
+      "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.1/agx-windows-x86_64.zip",
       "hash": "<SHA256_OF_WINDOWS_ZIP>"
     }
   },
@@ -138,7 +138,7 @@ scoop install agx
   "autoupdate": {
     "architecture": {
       "64bit": {
-        "url": "https://github.com/<your-username>/antigravity-backup/releases/download/v$version/agx-windows-x86_64.zip"
+        "url": "https://github.com/imsaba16/agx/releases/download/v$version/agx-windows-x86_64.zip"
       }
     }
   }

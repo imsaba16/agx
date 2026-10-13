@@ -6,11 +6,11 @@
 
 **Enterprise Context Exchange, Session Portability, and Security Engine for Google Antigravity**
 
-[![Release](https://img.shields.io/badge/release-v1.0.0--rc.1-0052CC.svg?style=flat-square)](https://github.com/sanjays/antigravity-backup/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.0--rc.1-0052CC.svg?style=flat-square)](https://github.com/imsaba16/agx/releases)
 [![Rust](https://img.shields.io/badge/rust-1.74%2B-DEA584.svg?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-28A745.svg?style=flat-square)](LICENSE)
 [![Security Audit](https://img.shields.io/badge/security-audited-success.svg?style=flat-square)](SECURITY.md)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-555555.svg?style=flat-square)](https://github.com/sanjays/antigravity-backup)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-555555.svg?style=flat-square)](https://github.com/imsaba16/agx)
 
 <p align="center">
   <a href="#overview">Overview</a> &bull;
@@ -70,11 +70,22 @@ By default, Google Antigravity stores conversation trajectories, planner thinkin
 
 ### Installation
 
+#### Homebrew (macOS & Linux)
+```bash
+brew install imsaba16/agx/agx
+```
+
+#### Scoop (Windows)
+```powershell
+scoop bucket add agx https://github.com/imsaba16/scoop-bucket
+scoop install agx
+```
+
 #### Build and Install via Cargo
 ```bash
 # Clone repository
-git clone https://github.com/sanjays/antigravity-backup.git
-cd antigravity-backup
+git clone https://github.com/imsaba16/agx.git
+cd agx
 
 # Install the agx binary globally into ~/.cargo/bin
 cargo install --path .

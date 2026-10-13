@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Ask Questions & Community Discussions
-    url: https://github.com/sanjays/antigravity-backup/discussions
+    url: https://github.com/imsaba16/agx/discussions
     about: Ask questions, discuss workflows, or share custom skills and automation scripts.
   - name: Report a Security Vulnerability
-    url: https://github.com/sanjays/antigravity-backup/security/advisories/new
+    url: https://github.com/imsaba16/agx/security/advisories/new
     about: Privately report security concerns or vulnerabilities.

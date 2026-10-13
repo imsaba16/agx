@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thank you for reporting an issue in **Antigravity eXtension (`agx`)**!
-        Before submitting, please make sure this is not a security vulnerability. If you suspect a security issue, refer to [SECURITY.md](https://github.com/sanjays/antigravity-backup/blob/main/SECURITY.md) to report it privately.
+        Before submitting, please make sure this is not a security vulnerability. If you suspect a security issue, refer to [SECURITY.md](https://github.com/imsaba16/agx/blob/main/SECURITY.md) to report it privately.
 
   - type: input
     id: version

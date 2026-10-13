@@ -27,8 +27,8 @@ cargo --version
 ### Cloning the Repository
 
 ```bash
-git clone https://github.com/sanjays/antigravity-backup.git
-cd antigravity-backup
+git clone https://github.com/imsaba16/agx.git
+cd agx
 ```
 
 ### Building the Project

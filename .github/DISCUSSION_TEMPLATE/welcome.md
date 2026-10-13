@@ -8,6 +8,6 @@ We are excited to have you in the **agx** community. This space is dedicated to:
 
 ## Getting Started
 
-- Check our [Documentation](https://github.com/sanjays/antigravity-backup/tree/main/docs) for technical guides.
-- Review [CONTRIBUTING.md](https://github.com/sanjays/antigravity-backup/blob/main/CONTRIBUTING.md) to get involved in development.
-- Please adhere to our [Code of Conduct](https://github.com/sanjays/antigravity-backup/blob/main/CODE_OF_CONDUCT.md).
+- Check our [Documentation](https://github.com/imsaba16/agx/tree/main/docs) for technical guides.
+- Review [CONTRIBUTING.md](https://github.com/imsaba16/agx/blob/main/CONTRIBUTING.md) to get involved in development.
+- Please adhere to our [Code of Conduct](https://github.com/imsaba16/agx/blob/main/CODE_OF_CONDUCT.md).
