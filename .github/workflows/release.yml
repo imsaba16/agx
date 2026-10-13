@@ -70,7 +70,7 @@ jobs:
 
           # macOS Intel (x86_64)
           - name: macOS x86_64
-            os: macos-13
+            os: macos-latest
             target: x86_64-apple-darwin
             binary_name: agx
             archive_ext: tar.gz
