@@ -16,9 +16,9 @@ use agx::project_importer::ProjectImporter;
 
 #[derive(Parser, Debug)]
 #[command(name = "agx")]
-#[command(author = "Antigravity Pair Programmer")]
-#[command(version = "0.1.0")]
-#[command(about = "agx: Portable backup, sync, and export tool for Google Antigravity brains, conversations, and artifacts", long_about = None)]
+#[command(author = "Antigravity Developers")]
+#[command(version = "1.0.0-rc.1")]
+#[command(about = "agx: Antigravity eXtension — Context exchange, session diffing, search, and backup engine for Google Antigravity", long_about = None)]
 struct Cli {
     /// Custom path to Antigravity directory (defaults to ~/.gemini/antigravity)
     #[arg(long, global = true)]

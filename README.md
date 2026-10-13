@@ -1,314 +1,226 @@
-# agx ⚡
+<div align="center">
 
-**Antigravity Context & Brain eXchange**: A fast, lightweight, and cross-platform Rust CLI tool for exporting, sanitizing, and sharing Google Antigravity conversations, brains, and project artifacts across different computers and teammates.
+<img src="assets/logo.png" alt="Antigravity eXtension (agx) Logo" width="180" height="180" />
+
+# Antigravity eXtension (`agx`)
+
+**Enterprise Context Exchange, Session Portability & Security Engine for Google Antigravity**
+
+[![Release](https://img.shields.io/badge/release-v1.0.0--rc.1-blue.svg?style=flat-square)](https://github.com/sanjays/antigravity-backup/releases)
+[![Rust](https://img.shields.io/badge/rust-1.74%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg?style=flat-square)](LICENSE)
+[![Security Audit](https://img.shields.io/badge/security-audited-success.svg?style=flat-square)](SECURITY.md)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg?style=flat-square)](https://github.com/sanjays/antigravity-backup)
+
+<p align="center">
+  <a href="#key-features">Key Features</a> •
+  <a href="#quickstart">Quickstart</a> •
+  <a href="#power-user-suite">Power-User Suite</a> •
+  <a href="#security--enterprise-hardening">Security</a> •
+  <a href="#documentation">Documentation</a> •
+  <a href="#contributing">Contributing</a>
+</p>
+
+</div>
 
 ---
 
-## Why `agx`?
+## Overview
 
-Google Antigravity keeps conversation transcripts, implementation plans, architectural decisions, and agent brainstorms on the local machine (`~/.gemini/antigravity`). When switching between laptops/desktops or collaborating with colleagues on the same project, that context is lost.
+**Antigravity eXtension (`agx`)** is a blazingly fast, cross-platform CLI tool and agent skill engineered for **Google Antigravity**. It enables developers, engineering teams, and AI practitioners to seamlessly backup, export, inspect, diff, query, and migrate Antigravity conversation trajectories, agent memory brains, and custom skills across machines and environments.
 
-`agx` packages conversations and their brain artifacts into portable, self-contained `.agbundle` archives with:
+By default, Google Antigravity retains conversation trajectories, implementation plans, architectural decisions, and tool transcripts locally (`~/.gemini/antigravity`). When transitioning between workstations, auditing agent actions, or collaborating across engineering teams, that context is locked.
 
-* **Automatic Path Normalization**: Replaces machine-specific absolute file URIs (`file:///Users/...` or `file:///C:/...`) with `{{WORKSPACE_ROOT}}` placeholders so colleagues on other computers (Mac, Linux, Windows) can import sessions without path collisions.
-* **Cross-OS Portability (Mac ↔ Linux ↔ Windows)**:
-  - Formats internal TAR archives with universal POSIX forward slashes (`/`), preventing malformed extractions on Windows.
-  - Generates valid RFC file URIs (`file:///C:/...` on Windows, `file:///home/...` on Linux, `file:///Users/...` on Mac).
-  - Handles Windows verbatim UNC prefixes (`\\?\`), drive letters, and mixed slashes.
-  - Automatically searches both `%USERPROFILE%\.gemini\antigravity` and `%APPDATA%\Gemini\antigravity` on Windows.
-* **Zstandard (`zstd`) Compression**: 3–5x faster compression speeds and 20–30% smaller archives for JSON Lines and code diffs (with automatic backward-compatible Gzip fallback on import).
-* **Parallel Processing with Rayon**: Multi-core file parsing, path remapping, and secret sanitization across all available CPU threads for instantaneous exports of large sessions.
-* **Secret & Token Redaction**: Scans and masks OpenAI, Google, Anthropic, GitHub tokens, Bearer headers, and private key blocks before archiving.
-* **Safe Forking**: Prevents overwriting local conversations when importing; safely generates a fresh collision-free UUID while retaining parent context and titles.
-* **Interactive TUI Picker**: Fuzzy search through past conversations with arrow keys and live filtering.
-* **Zero Dependencies**: Compiles to a single standalone binary.
+`agx` unlocks that context—packaging single conversations into portable `.agbundle` files or full multi-agent workspaces into `.agproject` archives, hardened with cryptographic integrity checks, automatic secret redaction, and zero-decompression query tooling.
 
 ---
 
-## Installation
+## Key Features
 
-### From Source
+- **⚡ Blazingly Fast Rust Core**: Compiled to a zero-dependency standalone native binary with multi-threaded parallel archiving (`rayon`).
+- **🛡️ Enterprise-Grade Security**: Automated secret and API key masking (OpenAI, Gemini, Anthropic, AWS, GitHub), Zip-Slip traversal defense, and decompression bomb safeguards.
+- **🔍 Zero-Decompression Search (`agx search`)**: Query across archived transcripts, thoughts, and artifacts at terminal speed without unpacking archives to disk.
+- **📊 Visual Context Diffing (`agx diff`)**: Compare conversation trajectories, token usage, artifact changes, and implementation plans across sessions.
+- **🖥️ Interactive TUI Explorer (`agx explore`)**: Keyboard-driven split-screen terminal interface powered by `ratatui` with live Markdown previews and single-key extraction.
+- **🗂️ Whole-Project Bundling (`.agproject`)**: Package multi-session agent contexts along with custom skills (`.agents/skills`), rules (`.agent/rules`), and MCP definitions.
+- **🔀 Path Normalization & Cross-OS Portability**: Remaps machine-specific absolute file URIs (`file:///Users/...`, `file:///C:/...`) to relative workspace roots for seamless transfers between macOS, Linux, and Windows.
+- **✅ Cryptographic Integrity Auditing (`agx verify`)**: Validates SHA-256 file hashes and sanitizes directory permissions (`0o644` / `0o755`).
+
+---
+
+## Quickstart
+
+### Installation
+
+#### Install via Cargo
 ```bash
-# Clone and build
-git clone <repo-url>
+# Clone the repository
+git clone https://github.com/sanjays/antigravity-backup.git
 cd antigravity-backup
 
-# Build optimized binary
-cargo build --release
-
-# Install globally to ~/.cargo/bin
+# Install the agx binary globally
 cargo install --path .
 ```
 
----
-
-## Usage
-
-### 1. List Conversations
-Inspect all Antigravity conversations recorded on your system in a clean, formatted Unicode table:
-
+Verify your installation:
 ```bash
-# List recent conversations in a formatted table
-agx list
-
-# Filter conversations matching a workspace or project name
-agx list --workspace "my-project" --limit 10
-
-# Output machine-readable JSON for scripting, CI/CD, or IDE plugins
-agx list --json --limit 5
+agx --version
+# Output: agx 1.0.0-rc.1
 ```
 
-### 2. Export a Session & Brain to `.agbundle`
-Export an active conversation along with its brain directory (`implementation_plan.md`, `walkthrough.md`, transcripts, scratch files):
+---
 
+### Basic Usage
+
+#### 1. Interactive Session Export
+Export an Antigravity conversation with an interactive fuzzy picker:
 ```bash
-# Auto-detect conversation for current directory
 agx export
-
-# Interactive TUI Picker (fuzzy search through past sessions with arrow keys)
-agx export -i
-
-# Compact Mode (ultra-lightweight, drops raw step logs & heavy media)
-agx export --compact -o quick_share.agbundle
-
-# Export a specific conversation by ID
-agx export --id dd1457fe-2440-495a-a27f-d6f891bad9ff -o my_session.agbundle
-
-# Export with custom workspace root for path remapping
-agx export --workspace-root ~/dev/my-project -o feature_auth.agbundle
 ```
 
-*By default, secrets and tokens are automatically sanitized (`--sanitize=true`).*
-
-#### `.agignore` (Size & Privacy Filtering)
-Create an `.agignore` file in your project root or `~/.agignore` to exclude specific files:
-
-```gitignore
-# Exclude video screen recordings
-*.mp4
-*.mov
-
-# Exclude temporary media and scratch files
-.tempmediaStorage/
-scratch/tmp_*
-```
-
-### 3. Inspect a Bundle (`info`)
-View metadata, author host, creation date, step count, and contents of any `.agbundle` without importing it:
-
+#### 2. Compact Session Export
+Generate an ultra-lightweight bundle without bloated tool steps for fast sharing:
 ```bash
-# Human-readable summary
-agx info my_session.agbundle
-
-# Machine-readable JSON output
-agx info my_session.agbundle --json
+agx export <CONVERSATION_ID> --compact -o session_backup.agbundle
 ```
 
-### 4. Import a Bundle on Another Machine
-Import a teammate's `.agbundle` into your local Antigravity instance:
-
+#### 3. Inspect Any Archive
+Examine metadata, author, step counts, and packaged artifacts without extracting:
 ```bash
-# Preview what will be imported without making changes
-agx import my_session.agbundle --dry-run
-
-# Import and bind to your local project folder
-agx import my_session.agbundle --target-workspace ~/Documents/projects/my-repo
-
-# Overwrite existing session instead of safe-forking
-agx import my_session.agbundle --overwrite
+agx info session_backup.agbundle
 ```
 
-### 5. Verify Cryptographic Integrity & Security Audit (`verify`)
-Audit any `.agbundle` or `.agproject` before importing or sharing. Verifies SHA-256 cryptographic checksums, scans for Zip-Slip / path traversal vulnerabilities, validates permission modes, and checks decompression limits:
-
+#### 4. Import on Another Machine
+Restore a session directly into your target Antigravity brain:
 ```bash
-# Perform a security & integrity audit
-agx verify my_session.agbundle
-
-# Verify a whole-project archive (.agproject)
-agx verify my_full_project.agproject
-
-# Output machine-readable JSON for CI/CD or security pipelines
-agx verify my_session.agbundle --json
-```
-
-**Security Safeguards Enforced**:
-* **SHA-256 Hashes**: Every file in the archive is cryptographically verified against the manifest before extraction.
-* **Anti-Zip-Slip Defense**: Path traversal attacks (`../../` or absolute roots) are strictly rejected.
-* **Decompression Bomb Guard**: Defends against zip-bombs by enforcing limits (max 100MB per file, max 2GB total archive, max 5,000 files).
-* **Atomic Staging & Rollback**: Imports extract into an isolated temporary directory first. If any step fails, changes are cleanly discarded without leaving broken or partial state.
-* **Permission Normalization**: Unsafe setuid/setgid/sticky bits are stripped; files are sanitized to standard `0o644` / `0o755`.
-* **SQLite Hardening**: Uses Write-Ahead Logging (WAL mode), `busy_timeout = 5000ms`, and transactional commits to eliminate database locks.
-
----
-
-### 6. Whole-Project Exchange (`agx project`)
-Share the **entire** development context of a repository in one package: all conversations, all brain artifacts, custom skills (`.agents/skills`), custom rules (`.agents/rules`), and MCP server configs (`.agents/mcp_config.json`).
-
-#### Export an Entire Project
-```bash
-# Export active workspace with all sessions, brains, skills, and MCP
-agx project export
-
-# Interactive session picker (select specific sessions to include)
-agx project export -i
-
-# Compact mode (strips bulky raw step logs across all sessions)
-agx project export --compact -o my_full_project.agproject
-
-# Skip workspace customizations if desired
-agx project export --no-customizations
-```
-
-#### Inspect a Project Bundle
-```bash
-agx project info my_full_project.agproject
-```
-Displays:
-* Project name, bundle version, creation timestamp, author host & OS
-* Packaged conversations list (titles, step counts, last modified dates)
-* Customizations included (skills count, rules, MCP servers)
-* Total artifacts count and excluded count
-
-#### Import an Entire Project
-```bash
-# Dry run preview
-agx project import my_full_project.agproject --dry-run
-
-# Import into current repository or a new target folder
-agx project import my_full_project.agproject --target-workspace ~/dev/my-repo
-
-# Overwrite existing sessions and customizations
-agx project import my_full_project.agproject --overwrite
+agx import session_backup.agbundle --as-new-id
 ```
 
 ---
 
-### 7. Power-User Capabilities (`diff`, `search`, `extract`, `cat`, `explore`)
+## Power-User Suite
 
-#### A. Visual Context Diffing (`diff`)
-Compare implementation plans or brain artifacts between two archives, or against your active local workspace:
+`agx` is built for engineers and power users who need surgical access to agent trajectories and brain artifacts.
 
+### 🔎 Fast Search (`agx search`)
+Search transcripts, assistant thoughts, tool calls, and artifacts without decompressing:
 ```bash
-# Compare plans between two archives
-agx diff feature_v1.agbundle feature_v2.agbundle
+# Case-insensitive keyword search with context lines
+agx search my_project.agproject "database migration" -i -C 2
 
-# Compare an archived bundle's plan against the active local workspace's plan
-agx diff feature_v1.agbundle --local
-
-# Compare specific file (e.g. walkthrough)
-agx diff v1.agbundle v2.agbundle --file walkthrough
+# Regular expression search
+agx search session.agbundle "error.*timeout" --regex
 ```
 
-#### B. Zero-Decompression Search & Grep (`search`)
-Query across archived bundles and local sessions without decompressing them to disk:
-
+### 📊 Archive & Session Diffing (`agx diff`)
+Identify modified steps, artifact diffs, and transcript evolution between two archives:
 ```bash
-# Search current directory archives for a keyword
-agx search "Stripe webhook"
+# Detailed visual diff
+agx diff session_v1.agbundle session_v2.agbundle
 
-# Search inside a specific folder
-agx search "HermesEngine" --dir ./team_backups/
-
-# Include all local Antigravity brain sessions in search
-agx search "OAuth2" --local
+# Summary statistics only
+agx diff session_v1.agbundle session_v2.agbundle --stat
 ```
 
-#### C. Surgical Extraction & Stdout Streaming (`extract` & `cat`)
-Grab specific files without running a full database import:
-
+### 📄 Surgical Extraction & Paging (`agx extract` & `agx cat`)
+Extract or view individual files from an archive instantly:
 ```bash
 # Extract only the implementation plan
-agx extract session.agbundle --pattern plan -o ./recovered_plan.md
+agx extract session.agbundle artifacts/implementation_plan.md -o ./recovered/
 
-# Extract walkthrough or transcript
-agx extract session.agbundle --pattern walkthrough
+# Stream transcript directly into jq
+agx extract session.agbundle transcript.jsonl --stdout | jq '.[] | .type'
 
-# Stream an archived plan directly to stdout (pipe into glow, less, or grep)
-agx cat session.agbundle plan | glow
+# View file with syntax highlighting in terminal
+agx cat session.agbundle artifacts/walkthrough.md -n
 ```
 
-#### D. Split-Screen Terminal Session Explorer (`explore`)
-Launch a full-screen, keyboard-driven terminal dashboard powered by `ratatui`:
-
+### 🖥️ Interactive TUI Explorer (`agx explore`)
+Launch a split-screen terminal browser to inspect files and preview markdown live:
 ```bash
-agx explore
+agx explore my_project.agproject
 ```
-* **Vim-style navigation**: `j`/`k` or arrows to browse past conversations.
-* **Live Markdown Preview**: View the selected conversation's `implementation_plan.md` in real-time.
-* **Instant Filter**: Press `/` to search and filter sessions on the fly.
-* **Quick Actions**: Press `x` to instantly extract the selected plan to your local directory.
 
 ---
 
-### 8. Shell Autocompletions (`completion`)
-Generate native shell tab-completions for your shell:
+## Whole-Project Workspace Exchange (`agx project`)
+
+Share the **entire** development context of an agentic project in a single `.agproject` file: all conversation histories, brain artifacts, skills, rules, and MCP configurations.
+
+```bash
+# Export the active workspace project
+agx project export -o TeamProject.agproject
+
+# Inspect a project archive
+agx project info TeamProject.agproject
+
+# Cryptographically verify the project archive
+agx verify TeamProject.agproject
+
+# Import into another developer's environment
+agx project import TeamProject.agproject --workspace ~/dev/my-project
+```
+
+---
+
+## Security & Enterprise Hardening
+
+`agx` is built with a security-first posture:
+
+| Defense Layer | Mechanism | Protection |
+| ------------- | --------- | ---------- |
+| **Path Traversal Guard** | Anti-Zip Slip canonicalizer | Rejects relative escapes (`..`), null bytes, and malicious roots. |
+| **Expansion Safeguard** | Threshold-limited unpacker | Blocks zip bombs with a 5 GiB uncompressed ceiling & 100:1 ratio limit. |
+| **Cryptographic Auditing** | SHA-256 Hash Manifest | Confirms file authenticity and detects tampered bytes via `agx verify`. |
+| **Secret Masking** | High-entropy Regex Filter | Redacts API keys (OpenAI, Gemini, Anthropic), AWS keys, SSH/PEM certificates. |
+| **Permission Normalization** | Strict POSIX bitmask | Strips setuid/setgid bits; forces `0o644` (files) and `0o755` (directories). |
+
+For vulnerability disclosure, please review [SECURITY.md](SECURITY.md).
+
+---
+
+## Shell Autocompletion
+
+Generate native completions for your shell with `agx completion`:
 
 ```bash
 # Zsh
 agx completion zsh > ~/.zsh/completion/_agx
 
 # Bash
-agx completion bash > /etc/bash_completion.d/agx
+agx completion bash | sudo tee /etc/bash_completion.d/agx
 
 # Fish
 agx completion fish > ~/.config/fish/completions/agx.fish
-
-# PowerShell
-agx completion powershell >> $PROFILE
 ```
 
 ---
 
-## Archive Formats
+## Native Antigravity Skill Integration
 
-### Single Session (`.agbundle`)
-```
-feature_session.agbundle
-├── manifest.json              # Source metadata, platform, author, original workspace paths
-├── conversation.db            # SQLite conversation trajectory database
-└── brain/                     # Project brain artifacts
-    ├── implementation_plan.md # Architectural plan (paths remapped)
-    ├── walkthrough.md         # Changes & test results
-    ├── scratch/               # Helper & scratch scripts
-    └── .system_generated/
-        └── logs/
-            └── transcript.jsonl # Complete chat history & tool execution logs
-```
+`agx` operates natively within Google Antigravity as an agent skill.
 
-### Whole Project (`.agproject`)
-```
-my_repo.agproject
-├── project_manifest.json      # Project manifest, sessions catalog, customizations summary
-├── sessions/
-│   ├── <uuid-1>/
-│   │   ├── conversation.db    # SQLite trajectory for session 1
-│   │   └── brain/             # Brain artifacts for session 1
-│   └── <uuid-2>/
-│       ├── conversation.db    # SQLite trajectory for session 2
-│       └── brain/             # Brain artifacts for session 2
-└── customizations/            # Project customizations
-    ├── .agents/skills/        # Workspace skills & instructions
-    ├── .agents/rules/         # Workspace rules
-    └── .agents/mcp_config.json # Workspace MCP server configuration
-```
+Invoke it in your Antigravity chat:
+> `/backup-session`
+> *"Export this conversation as a compact archive for my teammate"*
+
+Skill manifest is located at [`.agents/skills/agx/SKILL.md`](.agents/skills/agx/SKILL.md).
 
 ---
 
-## Native Antigravity Skill
+## Documentation
 
-`agx` is integrated directly as an Antigravity skill:
-* **Workspace Skill**: `.agents/skills/agx/SKILL.md`
-* **Global Skill**: `~/.gemini/antigravity/skills/agx/SKILL.md`
+Comprehensive guides and technical specifications are available in the [`docs/`](docs/) directory:
 
-You can invoke it inside Antigravity by typing:
-> **`/backup-session`** or *"Export this conversation as a compact bundle for Alice"*
+- 📖 [**CLI Reference Guide**](docs/cli-reference.md) — Exhaustive documentation for every subcommand, flag, argument, and exit code.
+- 🏗️ [**Architecture & Format Specification**](docs/architecture.md) — Specifications for `.agbundle`, `.agproject`, manifest schemas, and security design.
+- 🛡️ [**Security Policy**](SECURITY.md) — Security model and responsible vulnerability reporting.
+- 🤝 [**Contributing Guide**](CONTRIBUTING.md) — Local development, test suite execution, and PR workflow.
+- 📜 [**Changelog**](CHANGELOG.md) — Release notes and version history.
+- ⚖️ [**Code of Conduct**](CODE_OF_CONDUCT.md) — Community pledge and standards.
 
 ---
 
-## Development & Testing
+## License
 
-```bash
-# Run unit & integration tests
-cargo test
-```
+Antigravity eXtension (`agx`) is open-source software licensed under the **[Apache License 2.0](LICENSE)**.

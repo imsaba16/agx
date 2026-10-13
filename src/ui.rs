@@ -125,7 +125,7 @@ pub fn render_context_header(
     println!(
         "{} {}",
         "agx".bold().cyan(),
-        "─ Antigravity Context eXchange (v0.1.0)".dimmed()
+        "─ Antigravity eXtension (v1.0.0-rc.1)".dimmed()
     );
     println!("  {:<12} : {} ({})", "Workspace".dimmed(), ws_name.bold(), ws_display.dimmed());
 

@@ -1,11 +1,11 @@
 ---
 name: agx
-description: Antigravity Context & Brain eXchange tool. Backup, export, sanitize, inspect, or import Antigravity conversations, brains, and project artifacts. Activate this skill when the user asks to backup, export, share, or import an Antigravity chat session or project brain, or uses the /backup-session command.
+description: Antigravity eXtension (agx) tool. Backup, export, sanitize, diff, search, inspect, or import Google Antigravity conversations, brains, and project artifacts. Activate this skill when the user asks to backup, export, share, diff, search, or import an Antigravity chat session or project brain, or uses the /backup-session command.
 ---
 
-# agx: Antigravity Context & Brain eXchange Skill
+# agx: Antigravity eXtension Skill
 
-This skill allows the agent to backup, export, sanitize, inspect, and import Antigravity conversations and project brains so they can be preserved, archived, or shared with teammates across macOS, Linux, and Windows.
+This skill allows the agent to backup, export, sanitize, diff, search, inspect, and import Antigravity conversations and project brains so they can be preserved, archived, or shared with teammates across macOS, Linux, and Windows.
 
 ## Binary Location
 

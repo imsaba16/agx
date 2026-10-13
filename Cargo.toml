@@ -1,9 +1,13 @@
 [package]
 name = "agx"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 edition = "2021"
-authors = ["Antigravity Developer"]
-description = "agx: Antigravity Context & Brain eXchange tool for exporting, sanitizing, and sharing sessions across machines."
+authors = ["Antigravity Developers"]
+description = "agx: Antigravity eXtension — Enterprise context exchange, session diffing, zero-decompression search, and backup engine for Google Antigravity."
+license = "Apache-2.0"
+readme = "README.md"
+keywords = ["antigravity", "ai-agents", "context-exchange", "developer-tools", "backup"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }
