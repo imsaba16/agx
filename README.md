@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="Antigravity eXtension (agx) Logo" width="180" height="180" />
+<img src="assets/logo.png" alt="Antigravity eXtension (agx) Logo" width="360" />
 
 # Antigravity eXtension (`agx`)
 
