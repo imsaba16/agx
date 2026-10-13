@@ -175,3 +175,94 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+      - name: Automatically Update Homebrew Tap & Scoop Bucket
+        if: env.RELEASE_TOKEN != ''
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          TAG_NAME: ${{ needs.tag-check.outputs.tag_name }}
+        run: |
+          VERSION="${TAG_NAME#v}"
+          echo "Updating distribution repositories for release $VERSION..."
+
+          MAC_ARM64_HASH=$(grep "agx-macos-arm64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
+          MAC_X86_64_HASH=$(grep "agx-macos-x86_64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
+          LINUX_HASH=$(grep "agx-linux-x86_64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
+          WIN_HASH=$(grep "agx-windows-x86_64.zip" release-assets/SHA256SUMS.txt | awk '{print $1}')
+
+          # 1. Update Homebrew Tap
+          git clone "https://x-access-token:${RELEASE_TOKEN}@github.com/imsaba16/homebrew-agx.git" homebrew-tap
+          cd homebrew-tap
+          cat <<EOF > Formula/agx.rb
+          class Agx < Formula
+            desc "Context exchange, session diffing, search, and backup engine for Google Antigravity"
+            homepage "https://github.com/imsaba16/agx"
+            version "$VERSION"
+            license "Apache-2.0"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-arm64.tar.gz"
+                sha256 "$MAC_ARM64_HASH"
+              else
+                url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-x86_64.tar.gz"
+                sha256 "$MAC_X86_64_HASH"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
+                sha256 "$LINUX_HASH"
+              end
+            end
+
+            def install
+              bin.install "agx"
+              generate_completions_from_executable(bin/"agx", "completion")
+            end
+
+            test do
+              assert_match "agx #{version}", shell_output("#{bin}/agx --version")
+            end
+          end
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/agx.rb
+          git commit -m "chore(release): bump agx to $VERSION" || echo "No changes to commit"
+          git push origin main
+          cd ..
+
+          # 2. Update Scoop Bucket
+          git clone "https://x-access-token:${RELEASE_TOKEN}@github.com/imsaba16/scoop-bucket.git" scoop-repo
+          cd scoop-repo
+          cat <<EOF > bucket/agx.json
+          {
+            "version": "$VERSION",
+            "description": "Enterprise context exchange, session diffing, search, and backup engine for Google Antigravity",
+            "homepage": "https://github.com/imsaba16/agx",
+            "license": "Apache-2.0",
+            "architecture": {
+              "64bit": {
+                "url": "https://github.com/imsaba16/agx/releases/download/v$VERSION/agx-windows-x86_64.zip",
+                "hash": "$WIN_HASH"
+              }
+            },
+            "bin": "agx.exe",
+            "checkver": "github",
+            "autoupdate": {
+              "architecture": {
+                "64bit": {
+                  "url": "https://github.com/imsaba16/agx/releases/download/v\$version/agx-windows-x86_64.zip"
+                }
+              }
+            }
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bucket/agx.json
+          git commit -m "chore(release): bump agx to $VERSION" || echo "No changes to commit"
+          git push origin main
+          cd ..
