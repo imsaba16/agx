@@ -55,12 +55,8 @@ impl IgnoreFilter {
         // 3. Custom ignore file or workspace .agignore
         let ignore_path = custom_ignore_file
             .map(|p| p.to_path_buf())
-            .or_else(|| {
-                workspace_root.map(|ws| ws.join(".agignore"))
-            })
-            .or_else(|| {
-                dirs::home_dir().map(|h| h.join(".agignore"))
-            });
+            .or_else(|| workspace_root.map(|ws| ws.join(".agignore")))
+            .or_else(|| dirs::home_dir().map(|h| h.join(".agignore")));
 
         if let Some(ref path) = ignore_path {
             if path.exists() {
@@ -126,7 +122,9 @@ mod tests {
         assert!(filter.is_ignored(&PathBuf::from(".system_generated/steps/001.json")));
         assert!(filter.is_ignored(&PathBuf::from(".system_generated/messages/msg1.json")));
         assert!(filter.is_ignored(&PathBuf::from(".system_generated/tasks/task-62.log")));
-        assert!(filter.is_ignored(&PathBuf::from(".system_generated/logs/transcript_full.jsonl")));
+        assert!(filter.is_ignored(&PathBuf::from(
+            ".system_generated/logs/transcript_full.jsonl"
+        )));
         assert!(filter.is_ignored(&PathBuf::from(".user_uploaded/screenshot.png")));
         assert!(filter.is_ignored(&PathBuf::from("scratch/test_script.py")));
     }

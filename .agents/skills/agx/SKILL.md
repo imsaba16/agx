@@ -1,11 +1,11 @@
 ---
 name: agx
-description: Antigravity Context & Brain eXchange tool. Backup, export, sanitize, inspect, or import Antigravity conversations, brains, and project artifacts. Activate this skill when the user asks to backup, export, share, or import an Antigravity chat session or project brain, or uses the /backup-session command.
+description: Antigravity eXtension (agx) tool. Backup, export, sanitize, diff, search, inspect, or import Google Antigravity conversations, brains, and project artifacts. Activate this skill when the user asks to backup, export, share, diff, search, or import an Antigravity chat session or project brain, or uses the /backup-session command.
 ---
 
-# agx: Antigravity Context & Brain eXchange Skill
+# agx: Antigravity eXtension Skill
 
-This skill allows the agent to backup, export, sanitize, inspect, and import Antigravity conversations and project brains so they can be preserved, archived, or shared with teammates across macOS, Linux, and Windows.
+This skill allows the agent to backup, export, sanitize, diff, search, inspect, and import Antigravity conversations and project brains so they can be preserved, archived, or shared with teammates across macOS, Linux, and Windows.
 
 ## Binary Location
 
@@ -70,6 +70,11 @@ When the user asks to see previous sessions or find a session to export:
 ~/.cargo/bin/agx list
 ```
 
+To output machine-readable JSON:
+```bash
+~/.cargo/bin/agx list --json
+```
+
 To filter by a project name or workspace path:
 ```bash
 ~/.cargo/bin/agx list --workspace "<keyword>" --limit 10
@@ -82,6 +87,10 @@ When the user wants to know what is inside an `.agbundle` without importing it:
 
 ```bash
 ~/.cargo/bin/agx info <path-to-bundle.agbundle>
+```
+Or for JSON:
+```bash
+~/.cargo/bin/agx info <path-to-bundle.agbundle> --json
 ```
 
 Report:
@@ -135,4 +144,49 @@ When the user asks to backup, export, or import the **entire project** (all conv
    # Restore into target repository
    ~/.cargo/bin/agx project import <path-to-project.agproject> --target-workspace <target-repo>
    ```
+
+---
+
+### 6. Verify Archive Integrity & Security (`verify`)
+When the user asks to audit or verify an archive before importing or sharing:
+
+```bash
+# Verify a single session bundle (.agbundle)
+~/.cargo/bin/agx verify <path-to-bundle.agbundle>
+
+# Verify a whole-project archive (.agproject)
+~/.cargo/bin/agx verify <path-to-project.agproject>
+
+# Output JSON
+~/.cargo/bin/agx verify <path-to-bundle.agbundle> --json
+```
+
+Reports:
+- SHA-256 cryptographic hash matches across all files
+- Path traversal (Zip-Slip) safety
+- Archive resource limits (decompression bomb protection)
+- Permission sanitization
+
+---
+
+### 7. Power-User Commands (`diff`, `search`, `extract`, `cat`, `explore`)
+
+```bash
+# Compare plans between two archives or against current workspace
+~/.cargo/bin/agx diff <bundle_a> [bundle_b] [--local]
+
+# Zero-decompression full-text search across bundles or local sessions
+~/.cargo/bin/agx search "<query>" [--local] [--dir <path>]
+
+# Surgically extract files (plan, walkthrough, transcript) without importing
+~/.cargo/bin/agx extract <bundle> --pattern plan -o ./recovered_plan.md
+
+# Print archived file contents directly to stdout
+~/.cargo/bin/agx cat <bundle> plan | less
+
+# Launch full-screen interactive split-pane TUI explorer
+~/.cargo/bin/agx explore
+```
+
+
 

@@ -1,3 +1,5 @@
 /target
 *.agbundle
+*.agproject
 .DS_Store
+.idea/

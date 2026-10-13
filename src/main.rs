@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use colored::*;
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table};
 use std::path::{Path, PathBuf};
 
 use agx::bundler::Bundler;
@@ -13,9 +16,9 @@ use agx::project_importer::ProjectImporter;
 
 #[derive(Parser, Debug)]
 #[command(name = "agx")]
-#[command(author = "Antigravity Pair Programmer")]
-#[command(version = "0.1.0")]
-#[command(about = "agx: Portable backup, sync, and export tool for Google Antigravity brains, conversations, and artifacts", long_about = None)]
+#[command(author = "Antigravity Developers")]
+#[command(version = "1.0.0-rc.1")]
+#[command(about = "agx: Antigravity eXtension — Context exchange, session diffing, search, and backup engine for Google Antigravity", long_about = None)]
 struct Cli {
     /// Custom path to Antigravity directory (defaults to ~/.gemini/antigravity)
     #[arg(long, global = true)]
@@ -36,6 +39,10 @@ enum Commands {
         /// Maximum number of conversations to display
         #[arg(short, long, default_value_t = 15)]
         limit: usize,
+
+        /// Output results in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Export a single conversation and its project brain into a portable .agbundle archive
@@ -73,6 +80,10 @@ enum Commands {
     Info {
         /// Path to the .agbundle file
         bundle: PathBuf,
+
+        /// Output bundle metadata in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Import an .agbundle into local Antigravity instance
@@ -93,10 +104,88 @@ enum Commands {
         dry_run: bool,
     },
 
+    /// Verify cryptographic integrity (SHA-256) and security safety of an archive (.agbundle or .agproject)
+    Verify {
+        /// Path to the archive file (.agbundle or .agproject)
+        bundle: PathBuf,
+
+        /// Output verification report in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Compare context or implementation plans between two archives or against local workspace
+    Diff {
+        /// First archive to compare (.agbundle or .agproject)
+        bundle_a: PathBuf,
+
+        /// Second archive to compare against (optional if comparing against local workspace)
+        bundle_b: Option<PathBuf>,
+
+        /// Specific file pattern to diff (defaults to 'plan' / implementation_plan.md)
+        #[arg(short, long)]
+        file: Option<String>,
+
+        /// Compare bundle_a against the active local workspace's counterpart
+        #[arg(long)]
+        local: bool,
+    },
+
+    /// Search across archived bundles or local sessions without decompressing to disk
+    Search {
+        /// Search query or keyword
+        query: String,
+
+        /// Directory containing archives to search (defaults to current directory)
+        #[arg(short, long)]
+        dir: Option<PathBuf>,
+
+        /// Also search across local Antigravity brain storage
+        #[arg(long)]
+        local: bool,
+
+        /// Case-sensitive matching
+        #[arg(short = 'c', long)]
+        case_sensitive: bool,
+    },
+
+    /// Surgically extract specific files (e.g. plan, walkthrough) from an archive without importing
+    Extract {
+        /// Path to the archive file (.agbundle or .agproject)
+        bundle: PathBuf,
+
+        /// File pattern to extract (e.g. 'plan', 'walkthrough', 'transcript', or filename)
+        #[arg(short, long)]
+        pattern: Option<String>,
+
+        /// Destination output file or folder
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Print contents of an archived file directly to stdout (ideal for pipes, grep, or pager)
+    Cat {
+        /// Path to the archive file (.agbundle or .agproject)
+        bundle: PathBuf,
+
+        /// File to print (e.g. 'plan', 'walkthrough', 'manifest', 'transcript')
+        pattern: String,
+    },
+
+    /// Launch full-screen interactive split-pane TUI explorer & markdown previewer
+    Explore,
+
     /// Whole-project operations: export/import all sessions, brain artifacts, skills, and MCP configs
     Project {
         #[command(subcommand)]
         action: ProjectCommands,
+    },
+
+    /// Generate shell autocompletion scripts (bash, zsh, fish, powershell, elvish)
+    Completion {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
     },
 }
 
@@ -137,6 +226,10 @@ enum ProjectCommands {
     Info {
         /// Path to the .agproject bundle file
         bundle: PathBuf,
+
+        /// Output project manifest in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Import an .agproject bundle into local Antigravity instance, restoring all sessions and customizations
@@ -167,8 +260,12 @@ fn main() -> Result<()> {
     let paths = AntigravityPaths::discover(cli.data_dir)?;
 
     match cli.command {
-        Some(Commands::List { workspace, limit }) => {
-            handle_list(&paths, workspace, limit)?;
+        Some(Commands::List {
+            workspace,
+            limit,
+            json,
+        }) => {
+            handle_list(&paths, workspace, limit, json)?;
         }
         Some(Commands::Export {
             id,
@@ -190,8 +287,8 @@ fn main() -> Result<()> {
                 ignore_file,
             )?;
         }
-        Some(Commands::Info { bundle }) => {
-            handle_info(&bundle)?;
+        Some(Commands::Info { bundle, json }) => {
+            handle_info(&bundle, json)?;
         }
         Some(Commands::Import {
             bundle,
@@ -200,6 +297,67 @@ fn main() -> Result<()> {
             dry_run,
         }) => {
             handle_import(&paths, bundle, target_workspace, overwrite, dry_run)?;
+        }
+        Some(Commands::Verify { bundle, json }) => {
+            handle_verify(&bundle, json)?;
+        }
+        Some(Commands::Diff {
+            bundle_a,
+            bundle_b,
+            file,
+            local,
+        }) => {
+            if local || bundle_b.is_none() {
+                let ws = std::env::current_dir()?;
+                agx::diff::DiffEngine::diff_with_local(&bundle_a, &ws, &paths, file.as_deref())?;
+            } else if let Some(b) = bundle_b {
+                agx::diff::DiffEngine::diff_bundles(&bundle_a, &b, file.as_deref())?;
+            }
+        }
+        Some(Commands::Search {
+            query,
+            dir,
+            local,
+            case_sensitive,
+        }) => {
+            let search_dir = dir.unwrap_or_else(|| PathBuf::from("."));
+            let archive_hits =
+                agx::search::SearchEngine::search_archives(&query, &search_dir, case_sensitive)?;
+            let mut total_hits = archive_hits;
+
+            if local {
+                let local_hits =
+                    agx::search::SearchEngine::search_local(&query, &paths, case_sensitive)?;
+                total_hits.extend(local_hits);
+            }
+
+            agx::search::SearchEngine::print_hits(&query, &total_hits);
+        }
+        Some(Commands::Extract {
+            bundle,
+            pattern,
+            output,
+        }) => {
+            let extracted =
+                agx::extract::Extractor::extract(&bundle, pattern.as_deref(), output.as_deref())?;
+            println!(
+                "\n{}",
+                format!("✔ Successfully extracted {} file(s):", extracted.len())
+                    .green()
+                    .bold()
+            );
+            for p in extracted {
+                println!("  - {:?}", p);
+            }
+            println!();
+        }
+        Some(Commands::Cat { bundle, pattern }) => {
+            let (_, bytes) = agx::extract::Extractor::read_file_content(&bundle, &pattern)?;
+            let text = String::from_utf8_lossy(&bytes);
+            print!("{}", text);
+        }
+        Some(Commands::Explore) => {
+            agx::explorer::run_explorer(&paths)?;
         }
         Some(Commands::Project { action }) => match action {
             ProjectCommands::Export {
@@ -222,8 +380,8 @@ fn main() -> Result<()> {
                     ignore_file,
                 )?;
             }
-            ProjectCommands::Info { bundle } => {
-                handle_project_info(&bundle)?;
+            ProjectCommands::Info { bundle, json } => {
+                handle_project_info(&bundle, json)?;
             }
             ProjectCommands::Import {
                 bundle,
@@ -242,6 +400,10 @@ fn main() -> Result<()> {
                 )?;
             }
         },
+        Some(Commands::Completion { shell }) => {
+            let mut cmd = Cli::command();
+            clap_complete::generate(shell, &mut cmd, "agx", &mut std::io::stdout());
+        }
         None => {
             run_interactive_dashboard(&paths)?;
         }
@@ -251,91 +413,289 @@ fn main() -> Result<()> {
 }
 
 fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
-    println!("\n{}", "⚡ agx: Antigravity Context & Brain eXchange".bold().cyan());
-    println!("{}", "================================================".dimmed());
+    let render_config = agx::ui::get_render_config();
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    let db = Database::new(&paths.summaries_db());
+    let (active_conv, ws_sessions_count) = if paths.summaries_db().exists() {
+        let ws_convs = db
+            .find_conversations_for_workspace(&cwd)
+            .unwrap_or_default();
+        let count = ws_convs.len();
+        let active = ws_convs.into_iter().next();
+        (active, count)
+    } else {
+        (None, 0)
+    };
+
+    agx::ui::render_context_header(&cwd, active_conv.as_ref(), ws_sessions_count);
+
+    struct ActionItem {
+        id: &'static str,
+        title: &'static str,
+        desc: &'static str,
+    }
+
+    impl std::fmt::Display for ActionItem {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:<32} {}", self.title, self.desc.dimmed())
+        }
+    }
+
+    let actions = [
+        ActionItem {
+            id: "explore",
+            title: "Split-Screen TUI Explorer",
+            desc: "Interactive session navigator & live preview",
+        },
+        ActionItem {
+            id: "export_active",
+            title: "Export active session",
+            desc: "Package current conversation into .agbundle",
+        },
+        ActionItem {
+            id: "export_project",
+            title: "Export entire project (.agproject)",
+            desc: "All conversations, brain files, skills & MCP",
+        },
+        ActionItem {
+            id: "browse_export",
+            title: "Browse & export past sessions",
+            desc: "Interactive session picker with search",
+        },
+        ActionItem {
+            id: "diff",
+            title: "Diff context against local/archive",
+            desc: "Visual side-by-side plan changes",
+        },
+        ActionItem {
+            id: "search",
+            title: "Search session contents",
+            desc: "Zero-decompression grep across archives",
+        },
+        ActionItem {
+            id: "extract",
+            title: "Extract specific artifact",
+            desc: "Extract plan, walkthrough, or transcript",
+        },
+        ActionItem {
+            id: "inspect",
+            title: "Inspect archive metadata",
+            desc: "View manifest, steps, and artifacts",
+        },
+        ActionItem {
+            id: "verify",
+            title: "Verify archive integrity",
+            desc: "Cryptographic SHA-256 audit & security check",
+        },
+        ActionItem {
+            id: "import",
+            title: "Import archive into workspace",
+            desc: "Restore .agbundle or .agproject into Antigravity",
+        },
+        ActionItem {
+            id: "list",
+            title: "List workspace sessions",
+            desc: "View formatted conversation history table",
+        },
+        ActionItem {
+            id: "exit",
+            title: "Exit",
+            desc: "Close agx",
+        },
+    ];
 
     loop {
-        let options = vec![
-            "📋 1. List conversations",
-            "📦 2. Export a conversation (Interactive Picker)",
-            "⚡ 3. Export a conversation (Compact Mode)",
-            "🔍 4. Inspect an .agbundle file",
-            "📥 5. Import an .agbundle file",
-            "🗂️ 6. Export entire project (.agproject)",
-            "🔎 7. Inspect an .agproject file",
-            "📥 8. Import an .agproject file",
-            "🚪 9. Exit",
-        ];
-
-        let selection = match inquire::Select::new("What would you like to do?", options).prompt() {
-            Ok(s) => s,
+        let selection = match inquire::Select::new("Select an action:", actions.iter().collect())
+            .with_render_config(render_config)
+            .with_page_size(12)
+            .prompt()
+        {
+            Ok(s) => s.id,
             Err(_) => break,
         };
 
-        if selection.starts_with("📋 1") {
-            let _ = handle_list(paths, None, 20);
-        } else if selection.starts_with("📦 2") {
-            let _ = handle_export(paths, None, None, None, true, false, true, None);
-        } else if selection.starts_with("⚡ 3") {
-            let _ = handle_export(paths, None, None, None, true, true, true, None);
-        } else if selection.starts_with("🔍 4") {
-            let path_str = match inquire::Text::new("Enter path to .agbundle:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let _ = handle_info(Path::new(&path_str));
-        } else if selection.starts_with("📥 5") {
-            let bundle_path_str = match inquire::Text::new("Enter path to .agbundle to import:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let ws_path_str = match inquire::Text::new("Target workspace path (press Enter for current folder):").prompt() {
-                Ok(s) => s.trim().to_string(),
-                _ => String::new(),
-            };
-            let target_ws = if ws_path_str.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(ws_path_str))
-            };
-            let _ = handle_import(paths, PathBuf::from(bundle_path_str), target_ws, false, false);
-        } else if selection.starts_with("🗂️ 6") {
-            let _ = handle_project_export(paths, None, None, false, true, true, true, None);
-        } else if selection.starts_with("🔎 7") {
-            let path_str = match inquire::Text::new("Enter path to .agproject:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let _ = handle_project_info(Path::new(&path_str));
-        } else if selection.starts_with("📥 8") {
-            let bundle_path_str = match inquire::Text::new("Enter path to .agproject to import:").prompt() {
-                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-                _ => continue,
-            };
-            let ws_path_str = match inquire::Text::new("Target workspace path (press Enter for current folder):").prompt() {
-                Ok(s) => s.trim().to_string(),
-                _ => String::new(),
-            };
-            let target_ws = if ws_path_str.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(ws_path_str))
-            };
-            let _ = handle_project_import(paths, PathBuf::from(bundle_path_str), target_ws, false, true, false);
-        } else {
-            break;
+        match selection {
+            "explore" => {
+                let _ = agx::explorer::run_explorer(paths);
+            }
+            "export_active" => {
+                let compact_prompt = inquire::Select::new(
+                    "Select export mode:",
+                    vec![
+                        "Compact Mode  (Fast, lightweight, skips heavy raw step logs & media)",
+                        "Full Fidelity (Complete raw step logs and heavy media)",
+                    ],
+                )
+                .with_render_config(render_config)
+                .prompt();
+
+                match compact_prompt {
+                    Ok(choice) => {
+                        let is_compact = choice.starts_with("Compact");
+                        let _ =
+                            handle_export(paths, None, None, None, true, is_compact, false, None);
+                    }
+                    _ => continue,
+                }
+            }
+            "export_project" => {
+                let compact_prompt = inquire::Select::new(
+                    "Select project export mode:",
+                    vec![
+                        "Full Fidelity (All conversations, complete logs, skills & MCP)",
+                        "Compact Mode  (Stripped raw step logs across all sessions)",
+                    ],
+                )
+                .with_render_config(render_config)
+                .prompt();
+
+                match compact_prompt {
+                    Ok(choice) => {
+                        let is_compact = choice.starts_with("Compact");
+                        let _ = handle_project_export(
+                            paths, None, None, is_compact, true, true, true, None,
+                        );
+                    }
+                    _ => continue,
+                }
+            }
+            "browse_export" => {
+                let _ = handle_export(paths, None, None, None, true, false, true, None);
+            }
+            "diff" => {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to compare:")
+                {
+                    let _ =
+                        agx::diff::DiffEngine::diff_with_local(&archive_path, &cwd, paths, None);
+                }
+            }
+            "search" => {
+                let query_ans = inquire::Text::new("Enter search query or keyword:")
+                    .with_render_config(render_config)
+                    .prompt();
+                if let Ok(query) = query_ans {
+                    if !query.trim().is_empty() {
+                        let mut hits =
+                            agx::search::SearchEngine::search_archives(query.trim(), &cwd, false)?;
+                        let local_hits =
+                            agx::search::SearchEngine::search_local(query.trim(), paths, false)?;
+                        hits.extend(local_hits);
+                        agx::search::SearchEngine::print_hits(query.trim(), &hits);
+                    }
+                }
+            }
+            "extract" => {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to extract from:")
+                {
+                    let pattern_choice = inquire::Select::new(
+                        "Select file to extract:",
+                        vec![
+                            "Implementation Plan (implementation_plan.md)",
+                            "Walkthrough (walkthrough.md)",
+                            "Transcript (transcript.jsonl)",
+                            "Manifest (manifest.json)",
+                            "Extract all files",
+                        ],
+                    )
+                    .with_render_config(render_config)
+                    .prompt();
+
+                    let pattern = match pattern_choice {
+                        Ok("Implementation Plan (implementation_plan.md)") => Some("plan"),
+                        Ok("Walkthrough (walkthrough.md)") => Some("walkthrough"),
+                        Ok("Transcript (transcript.jsonl)") => Some("transcript"),
+                        Ok("Manifest (manifest.json)") => Some("manifest"),
+                        _ => None,
+                    };
+
+                    let extracted = agx::extract::Extractor::extract(&archive_path, pattern, None)?;
+                    println!(
+                        "\n{}",
+                        format!(
+                            "✔ Successfully extracted {} file(s) into current folder:",
+                            extracted.len()
+                        )
+                        .green()
+                        .bold()
+                    );
+                    for p in extracted {
+                        println!("  - {:?}", p);
+                    }
+                }
+            }
+            "inspect" => {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to inspect:")
+                {
+                    if is_project_archive(&archive_path) {
+                        let _ = handle_project_info(&archive_path, false);
+                    } else {
+                        let _ = handle_info(&archive_path, false);
+                    }
+                }
+            }
+            "verify" => {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to verify:")
+                {
+                    let _ = handle_verify(&archive_path, false);
+                }
+            }
+            "import" => {
+                if let Ok(Some(archive_path)) =
+                    agx::ui::select_archive_file("Select archive to import:")
+                {
+                    let ws_path_str = match inquire::Text::new(
+                        "Target workspace path (press Enter for current folder):",
+                    )
+                    .with_render_config(render_config)
+                    .prompt()
+                    {
+                        Ok(s) => s.trim().to_string(),
+                        _ => String::new(),
+                    };
+                    let target_ws = if ws_path_str.is_empty() {
+                        None
+                    } else {
+                        Some(PathBuf::from(ws_path_str))
+                    };
+
+                    if is_project_archive(&archive_path) {
+                        let _ = handle_project_import(
+                            paths,
+                            archive_path,
+                            target_ws,
+                            false,
+                            true,
+                            false,
+                        );
+                    } else {
+                        let _ = handle_import(paths, archive_path, target_ws, false, false);
+                    }
+                }
+            }
+            "list" => {
+                let _ = handle_list(paths, None, 20, false);
+            }
+            "exit" => break,
+            _ => break,
         }
 
         println!();
     }
 
-    println!("\nPress Enter to exit...");
-    let mut dummy = String::new();
-    let _ = std::io::stdin().read_line(&mut dummy);
     Ok(())
 }
 
-fn handle_list(paths: &AntigravityPaths, workspace_filter: Option<String>, limit: usize) -> Result<()> {
+fn handle_list(
+    paths: &AntigravityPaths,
+    workspace_filter: Option<String>,
+    limit: usize,
+    json: bool,
+) -> Result<()> {
     if !paths.summaries_db().exists() {
         eprintln!(
             "{}",
@@ -355,7 +715,9 @@ fn handle_list(paths: &AntigravityPaths, workspace_filter: Option<String>, limit
         .into_iter()
         .filter(|c| {
             if let Some(ref filter) = workspace_filter {
-                c.workspace_uris.to_lowercase().contains(&filter.to_lowercase())
+                c.workspace_uris
+                    .to_lowercase()
+                    .contains(&filter.to_lowercase())
             } else {
                 true
             }
@@ -363,27 +725,33 @@ fn handle_list(paths: &AntigravityPaths, workspace_filter: Option<String>, limit
         .take(limit)
         .collect();
 
+    if json {
+        println!("{}", serde_json::to_string_pretty(&filtered)?);
+        return Ok(());
+    }
+
     if filtered.is_empty() {
         println!("{}", "No matching conversations found.".yellow());
         return Ok(());
     }
 
-    println!("\n{}", "=== Antigravity Conversations ===".bold().cyan());
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("ID").add_attribute(Attribute::Bold),
+            Cell::new("Title").add_attribute(Attribute::Bold),
+            Cell::new("Modified").add_attribute(Attribute::Bold),
+            Cell::new("Steps").add_attribute(Attribute::Bold),
+            Cell::new("Brain").add_attribute(Attribute::Bold),
+            Cell::new("DB").add_attribute(Attribute::Bold),
+        ]);
+
     for conv in &filtered {
         let brain_exists = paths.conversation_brain(&conv.conversation_id).exists();
         let db_exists = paths.conversation_db(&conv.conversation_id).exists();
-
-        let brain_badge = if brain_exists {
-            "Brain: YES".green()
-        } else {
-            "Brain: NO".dimmed()
-        };
-
-        let db_badge = if db_exists {
-            "DB: YES".green()
-        } else {
-            "DB: NO".dimmed()
-        };
 
         let display_title = if conv.title.trim().is_empty() {
             "Untitled Conversation"
@@ -391,21 +759,39 @@ fn handle_list(paths: &AntigravityPaths, workspace_filter: Option<String>, limit
             &conv.title
         };
 
-        println!(
-            "\n• {} [{}]",
-            display_title.bold().white(),
-            conv.conversation_id.dimmed()
-        );
-        println!("  Last Modified : {}", conv.last_modified_time.cyan());
-        println!("  Workspaces    : {}", conv.workspace_uris);
-        println!(
-            "  Steps         : {} | {} | {}",
-            conv.step_count.to_string().yellow(),
-            brain_badge,
-            db_badge
-        );
+        let short_id = if conv.conversation_id.len() > 8 {
+            &conv.conversation_id[..8]
+        } else {
+            &conv.conversation_id
+        };
+
+        let date = if conv.last_modified_time.len() >= 19 {
+            conv.last_modified_time[..19].replace('T', " ")
+        } else {
+            conv.last_modified_time.clone()
+        };
+
+        table.add_row(vec![
+            Cell::new(short_id).fg(Color::DarkGrey),
+            Cell::new(display_title).add_attribute(Attribute::Bold),
+            Cell::new(date).fg(Color::Cyan),
+            Cell::new(conv.step_count.to_string()).fg(Color::Yellow),
+            if brain_exists {
+                Cell::new("✓").fg(Color::Green)
+            } else {
+                Cell::new("-").fg(Color::DarkGrey)
+            },
+            if db_exists {
+                Cell::new("✓").fg(Color::Green)
+            } else {
+                Cell::new("-").fg(Color::DarkGrey)
+            },
+        ]);
     }
-    println!("\nTotal displayed: {}\n", filtered.len());
+
+    println!("\n{}", "=== Antigravity Conversations ===".bold().cyan());
+    println!("{table}");
+    println!("Total displayed: {}\n", filtered.len());
 
     Ok(())
 }
@@ -453,13 +839,16 @@ fn select_conversation_interactively(
         .collect();
 
     let ans = inquire::Select::new("Select conversation to export:", items)
+        .with_render_config(agx::ui::get_render_config())
         .with_page_size(15)
         .with_help_message("Use ↑/↓ arrows to navigate, type to filter, Esc to cancel")
         .prompt();
 
     match ans {
         Ok(selected) => Ok(selected.summary.clone()),
-        Err(inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted) => {
+        Err(
+            inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted,
+        ) => {
             println!("{}", "Export cancelled by user.".yellow());
             std::process::exit(0);
         }
@@ -502,31 +891,46 @@ fn handle_export(
         if let Some(conv) = matching {
             println!(
                 "{}",
-                format!("Auto-detected active conversation for current directory: {}", conv.title).green()
+                format!(
+                    "Auto-detected active conversation for current directory: {}",
+                    conv.title
+                )
+                .green()
             );
             (conv.conversation_id.clone(), conv)
         } else {
             let all = db.list_conversations()?;
             println!(
                 "{}",
-                "No active conversation matched current directory. Opening interactive picker...".yellow()
+                "No active conversation matched current directory. Opening interactive picker..."
+                    .yellow()
             );
             let selected = select_conversation_interactively(&all)?;
             (selected.conversation_id.clone(), selected)
         }
     };
 
-    let ws_root = workspace_root
-        .or_else(|| std::env::current_dir().ok());
+    let ws_root = workspace_root.or_else(|| std::env::current_dir().ok());
 
     let final_output = output_path.unwrap_or_else(|| {
         let sanitized_title: String = summary
             .title
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         let suffix = if compact { "_compact" } else { "" };
-        PathBuf::from(format!("{}{}_{}.agbundle", sanitized_title, suffix, &conv_id[..8]))
+        PathBuf::from(format!(
+            "{}{}_{}.agbundle",
+            sanitized_title,
+            suffix,
+            &conv_id[..8]
+        ))
     });
 
     let options = ExportOptions {
@@ -538,11 +942,28 @@ fn handle_export(
         custom_ignore_file: ignore_file,
     };
 
-    println!("\n{}", "📦 Packaging Antigravity Brain Bundle...".bold().cyan());
+    println!(
+        "\n{}",
+        "● Packaging Session Archive (.agbundle)".bold().cyan()
+    );
     println!("  Title       : {}", summary.title.bold());
     println!("  ID          : {}", conv_id);
-    println!("  Sanitize    : {}", if sanitize { "YES (Masking secrets)".green() } else { "NO".yellow() });
-    println!("  Compact Mode: {}", if compact { "YES (Skipping raw step logs & heavy media)".green() } else { "NO (Full fidelity)".dimmed() });
+    println!(
+        "  Sanitize    : {}",
+        if sanitize {
+            "YES (Masking secrets)".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode: {}",
+        if compact {
+            "YES (Skipping raw step logs & heavy media)".green()
+        } else {
+            "NO (Full fidelity)".dimmed()
+        }
+    );
     if let Some(ref ws) = ws_root {
         println!("  Remap Root  : {:?}", ws);
     }
@@ -553,7 +974,7 @@ fn handle_export(
     println!(
         "\n{}",
         format!(
-            "✅ Successfully exported bundle! Packaged {} brain files ({} files excluded by .agignore/compact filter).",
+            "✔ Successfully exported session archive! Packaged {} brain files ({} files excluded by .agignore/compact filter).",
             manifest.artifacts_count,
             manifest.ignored_count
         )
@@ -565,21 +986,65 @@ fn handle_export(
     Ok(())
 }
 
-fn handle_info(bundle_path: &Path) -> Result<()> {
+fn handle_info(bundle_path: &Path, json: bool) -> Result<()> {
     let manifest = Bundler::inspect_bundle(bundle_path)?;
 
-    println!("\n{}", "=== Antigravity Bundle Information ===".bold().cyan());
+    if json {
+        println!("{}", serde_json::to_string_pretty(&manifest)?);
+        return Ok(());
+    }
+
+    println!(
+        "\n{}",
+        "=== Antigravity Bundle Information ===".bold().cyan()
+    );
     println!("  Bundle Version : {}", manifest.version.yellow());
     println!("  Created At     : {}", manifest.created_at.cyan());
-    println!("  Source Host    : {} ({})", manifest.source_username, manifest.source_os);
-    println!("  Sanitized      : {}", if manifest.sanitized { "YES".green() } else { "NO".yellow() });
-    println!("  Compact Mode   : {}", if manifest.compact { "YES".green() } else { "NO".dimmed() });
-    println!("  Artifacts Count: {}", manifest.artifacts_count.to_string().bold());
-    println!("  Excluded Count : {}", manifest.ignored_count.to_string().yellow());
-    println!("  Includes DB    : {}", if manifest.has_db { "YES".green() } else { "NO".red() });
+    println!(
+        "  Source Host    : {} ({})",
+        manifest.source_username, manifest.source_os
+    );
+    println!(
+        "  Sanitized      : {}",
+        if manifest.sanitized {
+            "YES".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode   : {}",
+        if manifest.compact {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  Artifacts Count: {}",
+        manifest.artifacts_count.to_string().bold()
+    );
+    println!(
+        "  Excluded Count : {}",
+        manifest.ignored_count.to_string().yellow()
+    );
+    println!(
+        "  Includes DB    : {}",
+        if manifest.has_db {
+            "YES".green()
+        } else {
+            "NO".red()
+        }
+    );
     println!("\n{}", "--- Conversation Details ---".bold());
-    println!("  Title          : {}", manifest.conversation.title.bold().white());
-    println!("  Original ID    : {}", manifest.conversation.conversation_id);
+    println!(
+        "  Title          : {}",
+        manifest.conversation.title.bold().white()
+    );
+    println!(
+        "  Original ID    : {}",
+        manifest.conversation.conversation_id
+    );
     println!("  Step Count     : {}", manifest.conversation.step_count);
     println!("  Original Roots : {:?}", manifest.original_workspace_paths);
     println!();
@@ -601,15 +1066,21 @@ fn handle_import(
         dry_run,
     };
 
-    println!("\n{}", "📥 Importing Antigravity Bundle...".bold().cyan());
+    println!("\n{}", "● Importing Session Archive...".bold().cyan());
     if dry_run {
-        println!("{}", "MODE: DRY-RUN (No files will be modified)".yellow().bold());
+        println!(
+            "{}",
+            "MODE: DRY-RUN (No files will be modified)".yellow().bold()
+        );
     }
 
     let (imported_id, manifest) = Importer::import_bundle(paths, &options)?;
 
     println!("  Title           : {}", manifest.conversation.title.bold());
-    println!("  Original ID     : {}", manifest.conversation.conversation_id);
+    println!(
+        "  Original ID     : {}",
+        manifest.conversation.conversation_id
+    );
     println!("  Assigned ID     : {}", imported_id.cyan());
     if let Some(ref target_ws) = options.target_workspace {
         println!("  Bound Workspace : {:?}", target_ws);
@@ -617,11 +1088,14 @@ fn handle_import(
     println!("  Artifacts Count : {}", manifest.artifacts_count);
 
     if dry_run {
-        println!("\n{}", "Dry-run complete. Run without --dry-run to execute import.".green());
+        println!(
+            "\n{}",
+            "Dry-run complete. Run without --dry-run to execute import.".green()
+        );
     } else {
         println!(
             "\n{}",
-            "✅ Successfully imported into Antigravity! Ready to use in chat or IDE."
+            "✔ Successfully imported into Antigravity! Ready to use in chat or IDE."
                 .bold()
                 .green()
         );
@@ -629,6 +1103,112 @@ fn handle_import(
     println!();
 
     Ok(())
+}
+
+fn handle_verify(bundle_path: &Path, json: bool) -> Result<()> {
+    if !bundle_path.exists() {
+        anyhow::bail!("Bundle file does not exist: {:?}", bundle_path);
+    }
+
+    let is_project = is_project_archive(bundle_path);
+
+    let (report, archive_type) = if is_project {
+        (
+            ProjectBundler::verify_project_bundle(bundle_path)?,
+            "Project Archive (.agproject)",
+        )
+    } else {
+        (
+            Bundler::verify_bundle(bundle_path)?,
+            "Conversation Bundle (.agbundle)",
+        )
+    };
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        if !report.is_valid {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    println!("\n{}", "● AGX Security & Integrity Audit".bold().cyan());
+    println!(
+        "{}",
+        "────────────────────────────────────────────────".dimmed()
+    );
+    println!("  Archive File   : {:?}", bundle_path);
+    println!("  Archive Format : {}", archive_type.bold());
+    println!(
+        "  Files Checked  : {}",
+        report.total_files_checked.to_string().cyan()
+    );
+    println!(
+        "  Valid Hashes   : {}",
+        report.matched_checksums.to_string().green().bold()
+    );
+
+    if report.is_valid {
+        println!("\n{}", "✔ INTEGRITY AUDIT PASSED".bold().green());
+        println!("  • SHA-256 Checksums : Verified all recorded files match cryptographic hashes.");
+        println!("  • Path Traversal    : No Zip-Slip or illegal path traversal vectors detected.");
+        println!("  • Resource Limits   : Decompression bomb safeguards enforced & verified.");
+        println!("  • File Modes        : Sanitized permissions (0o644 / 0o755).\n");
+    } else {
+        println!("\n{}", "✖ INTEGRITY AUDIT FAILED".bold().red());
+        if !report.mismatched_files.is_empty() {
+            println!(
+                "\n{}",
+                "  Mismatched Checksums (File Tampering Detected):"
+                    .red()
+                    .bold()
+            );
+            for f in &report.mismatched_files {
+                println!("    - {}", f.red());
+            }
+        }
+        if !report.missing_files.is_empty() {
+            println!(
+                "\n{}",
+                "  Missing Files (Declared in manifest but not found):"
+                    .yellow()
+                    .bold()
+            );
+            for f in &report.missing_files {
+                println!("    - {}", f.yellow());
+            }
+        }
+        if !report.errors.is_empty() {
+            println!("\n{}", "  Security / Malformation Errors:".red().bold());
+            for err in &report.errors {
+                println!("    - {}", err.red());
+            }
+        }
+        println!();
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn is_project_archive(path: &Path) -> bool {
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        if ext.eq_ignore_ascii_case("agproject") {
+            return true;
+        }
+    }
+    if let Ok(mut archive) = agx::bundler::open_archive(path) {
+        if let Ok(entries) = archive.entries() {
+            for entry in entries.flatten() {
+                if let Ok(p) = entry.path() {
+                    if p.to_string_lossy() == "project_manifest.json" {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 fn select_project_conversations_interactively(
@@ -669,20 +1249,29 @@ fn select_project_conversations_interactively(
         })
         .collect();
 
-    let ans = inquire::MultiSelect::new("Select conversations to include in project archive:", items)
-        .with_all_selected_by_default()
-        .with_page_size(15)
-        .with_help_message("Use Space to toggle, ↑/↓ to navigate, type to filter, Enter to confirm")
-        .prompt();
+    let ans =
+        inquire::MultiSelect::new("Select conversations to include in project archive:", items)
+            .with_render_config(agx::ui::get_render_config())
+            .with_all_selected_by_default()
+            .with_page_size(15)
+            .with_help_message(
+                "Use Space to toggle, ↑/↓ to navigate, type to filter, Enter to confirm",
+            )
+            .prompt();
 
     match ans {
         Ok(selected) => {
             if selected.is_empty() {
                 anyhow::bail!("At least one conversation must be selected.");
             }
-            Ok(selected.into_iter().map(|item| item.summary.conversation_id.clone()).collect())
+            Ok(selected
+                .into_iter()
+                .map(|item| item.summary.conversation_id.clone())
+                .collect())
         }
-        Err(inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted) => {
+        Err(
+            inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted,
+        ) => {
             println!("{}", "Project export cancelled by user.".yellow());
             std::process::exit(0);
         }
@@ -727,9 +1316,8 @@ fn handle_project_export(
         .unwrap_or_else(|| "project".to_string());
 
     let suffix = if compact { "_compact" } else { "" };
-    let final_output = output.unwrap_or_else(|| {
-        PathBuf::from(format!("{}{}.agproject", project_name, suffix))
-    });
+    let final_output =
+        output.unwrap_or_else(|| PathBuf::from(format!("{}{}.agproject", project_name, suffix)));
 
     let options = ProjectExportOptions {
         workspace_root: ws_root.clone(),
@@ -741,12 +1329,36 @@ fn handle_project_export(
         custom_ignore_file: ignore_file,
     };
 
-    println!("\n{}", "🗂️  Packaging Antigravity Project Bundle...".bold().cyan());
+    println!(
+        "\n{}",
+        "● Packaging Project Archive (.agproject)".bold().cyan()
+    );
     println!("  Workspace Root : {:?}", ws_root);
     println!("  Project Name   : {}", project_name.bold());
-    println!("  Customizations : {}", if include_customizations { "YES (.agents/skills, rules, MCP)".green() } else { "NO (Skipped)".yellow() });
-    println!("  Sanitize       : {}", if sanitize { "YES (Masking secrets)".green() } else { "NO".yellow() });
-    println!("  Compact Mode   : {}", if compact { "YES (Skipping raw step logs & heavy media)".green() } else { "NO (Full fidelity)".dimmed() });
+    println!(
+        "  Customizations : {}",
+        if include_customizations {
+            "YES (.agents/skills, rules, MCP)".green()
+        } else {
+            "NO (Skipped)".yellow()
+        }
+    );
+    println!(
+        "  Sanitize       : {}",
+        if sanitize {
+            "YES (Masking secrets)".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode   : {}",
+        if compact {
+            "YES (Skipping raw step logs & heavy media)".green()
+        } else {
+            "NO (Full fidelity)".dimmed()
+        }
+    );
     println!("  Output File    : {:?}", final_output);
 
     let manifest = ProjectBundler::export_project_bundle(paths, &options)?;
@@ -754,7 +1366,7 @@ fn handle_project_export(
     println!(
         "\n{}",
         format!(
-            "✅ Successfully exported project bundle! Packaged {} conversations, {} brain artifacts ({} excluded).",
+            "✔ Successfully exported project archive! Packaged {} conversations, {} brain artifacts ({} excluded).",
             manifest.conversations.len(),
             manifest.total_artifacts_count,
             manifest.total_ignored_count,
@@ -763,7 +1375,10 @@ fn handle_project_export(
         .green()
     );
     if manifest.customizations.has_skills {
-        println!("  Skills Included : {} skills", manifest.customizations.skills_count);
+        println!(
+            "  Skills Included : {} skills",
+            manifest.customizations.skills_count
+        );
     }
     if manifest.customizations.has_rules {
         println!("  Rules Included  : YES");
@@ -776,26 +1391,90 @@ fn handle_project_export(
     Ok(())
 }
 
-fn handle_project_info(bundle_path: &Path) -> Result<()> {
+fn handle_project_info(bundle_path: &Path, json: bool) -> Result<()> {
     let manifest = ProjectBundler::inspect_project_bundle(bundle_path)?;
 
-    println!("\n{}", "=== Antigravity Project Bundle Information ===".bold().cyan());
-    println!("  Project Name   : {}", manifest.project_name.bold().white());
+    if json {
+        println!("{}", serde_json::to_string_pretty(&manifest)?);
+        return Ok(());
+    }
+
+    println!(
+        "\n{}",
+        "=== Antigravity Project Bundle Information ==="
+            .bold()
+            .cyan()
+    );
+    println!(
+        "  Project Name   : {}",
+        manifest.project_name.bold().white()
+    );
     println!("  Bundle Version : {}", manifest.version.yellow());
     println!("  Created At     : {}", manifest.created_at.cyan());
-    println!("  Source Host    : {} ({})", manifest.source_username, manifest.source_os);
+    println!(
+        "  Source Host    : {} ({})",
+        manifest.source_username, manifest.source_os
+    );
     println!("  Original Path  : {}", manifest.original_workspace_path);
-    println!("  Sanitized      : {}", if manifest.sanitized { "YES".green() } else { "NO".yellow() });
-    println!("  Compact Mode   : {}", if manifest.compact { "YES".green() } else { "NO".dimmed() });
-    println!("  Artifacts Count: {}", manifest.total_artifacts_count.to_string().bold());
-    println!("  Excluded Count : {}", manifest.total_ignored_count.to_string().yellow());
+    println!(
+        "  Sanitized      : {}",
+        if manifest.sanitized {
+            "YES".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        "  Compact Mode   : {}",
+        if manifest.compact {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  Artifacts Count: {}",
+        manifest.total_artifacts_count.to_string().bold()
+    );
+    println!(
+        "  Excluded Count : {}",
+        manifest.total_ignored_count.to_string().yellow()
+    );
 
     println!("\n{}", "--- Customizations Included ---".bold());
-    println!("  Skills : {}", if manifest.customizations.has_skills { format!("YES ({} skills)", manifest.customizations.skills_count).green() } else { "NO".dimmed() });
-    println!("  Rules  : {}", if manifest.customizations.has_rules { "YES".green() } else { "NO".dimmed() });
-    println!("  MCP    : {}", if manifest.customizations.has_mcp { "YES".green() } else { "NO".dimmed() });
+    println!(
+        "  Skills : {}",
+        if manifest.customizations.has_skills {
+            format!("YES ({} skills)", manifest.customizations.skills_count).green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  Rules  : {}",
+        if manifest.customizations.has_rules {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
+    println!(
+        "  MCP    : {}",
+        if manifest.customizations.has_mcp {
+            "YES".green()
+        } else {
+            "NO".dimmed()
+        }
+    );
 
-    println!("\n{}", format!("--- Packaged Conversations ({}) ---", manifest.conversations.len()).bold());
+    println!(
+        "\n{}",
+        format!(
+            "--- Packaged Conversations ({}) ---",
+            manifest.conversations.len()
+        )
+        .bold()
+    );
     for (i, conv) in manifest.conversations.iter().enumerate() {
         let title = if conv.title.trim().is_empty() {
             "Untitled Conversation"
@@ -836,29 +1515,58 @@ fn handle_project_import(
         restore_customizations,
     };
 
-    println!("\n{}", "📥 Importing Antigravity Project Bundle...".bold().cyan());
+    println!(
+        "\n{}",
+        "● Importing Project Archive (.agproject)...".bold().cyan()
+    );
     if dry_run {
-        println!("{}", "MODE: DRY-RUN (No files will be modified)".yellow().bold());
+        println!(
+            "{}",
+            "MODE: DRY-RUN (No files will be modified)".yellow().bold()
+        );
     }
     println!("  Bundle File     : {:?}", bundle_path);
     println!("  Target Workspace: {:?}", target_ws);
-    println!("  Customizations  : {}", if restore_customizations { "YES (Restoring skills, rules, MCP)".green() } else { "NO (Skipped)".yellow() });
-    println!("  Overwrite       : {}", if overwrite { "YES".yellow() } else { "NO (Safe-forking collisions)".green() });
+    println!(
+        "  Customizations  : {}",
+        if restore_customizations {
+            "YES (Restoring skills, rules, MCP)".green()
+        } else {
+            "NO (Skipped)".yellow()
+        }
+    );
+    println!(
+        "  Overwrite       : {}",
+        if overwrite {
+            "YES".yellow()
+        } else {
+            "NO (Safe-forking collisions)".green()
+        }
+    );
 
     let (count, manifest) = ProjectImporter::import_project_bundle(paths, &options)?;
 
     println!("\n{}", "--- Import Summary ---".bold());
     println!("  Project Name         : {}", manifest.project_name.bold());
-    println!("  Conversations Mapped : {}", count.to_string().cyan().bold());
-    println!("  Total Artifacts      : {}", manifest.total_artifacts_count);
+    println!(
+        "  Conversations Mapped : {}",
+        count.to_string().cyan().bold()
+    );
+    println!(
+        "  Total Artifacts      : {}",
+        manifest.total_artifacts_count
+    );
 
     if dry_run {
-        println!("\n{}", "Dry-run complete. Run without --dry-run to execute import.".green());
+        println!(
+            "\n{}",
+            "Dry-run complete. Run without --dry-run to execute import.".green()
+        );
     } else {
         println!(
             "\n{}",
             format!(
-                "✅ Successfully imported project! Restored {} conversations and workspace context.",
+                "✔ Successfully imported project! Restored {} conversations and workspace context.",
                 count
             )
             .bold()
@@ -869,4 +1577,3 @@ fn handle_project_import(
 
     Ok(())
 }
-

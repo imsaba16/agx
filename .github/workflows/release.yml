@@ -2,33 +2,95 @@ name: Release Multi-Platform Binaries
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
+  tag-check:
+    name: Determine Release Tag
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version and existing tag
+        id: check
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            echo "Triggered by manual tag: $TAG"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d '"' -f 2)
+            TAG="v$VERSION"
+            echo "Cargo.toml version: $VERSION -> Target tag: $TAG"
+            
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG already exists. Skipping release."
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Creating new git tag: $TAG"
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git tag -a "$TAG" -m "Release $TAG"
+              git push origin "$TAG"
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
+              echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
   build:
-    name: Build - ${{ matrix.os }} (${{ matrix.target }})
+    name: Build - ${{ matrix.name }} (${{ matrix.target }})
+    needs: tag-check
+    if: needs.tag-check.outputs.should_release == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # macOS Apple Silicon
-          - os: macos-latest
+          # macOS Apple Silicon (ARM64)
+          - name: macOS ARM64
+            os: macos-latest
             target: aarch64-apple-darwin
             binary_name: agx
-            asset_name: agx-macos-arm64
-          # Linux x86_64
-          - os: ubuntu-latest
+            archive_ext: tar.gz
+            asset_stem: agx-macos-arm64
+
+          # macOS Intel (x86_64)
+          - name: macOS x86_64
+            os: macos-13
+            target: x86_64-apple-darwin
+            binary_name: agx
+            archive_ext: tar.gz
+            asset_stem: agx-macos-x86_64
+
+          # Linux x86_64 (GNU)
+          - name: Linux x86_64
+            os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary_name: agx
-            asset_name: agx-linux-x86_64
-          # Windows x86_64
-          - os: windows-latest
+            archive_ext: tar.gz
+            asset_stem: agx-linux-x86_64
+
+          # Windows x86_64 (MSVC)
+          - name: Windows x86_64
+            os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: agx.exe
-            asset_name: agx-windows-x86_64.exe
+            archive_ext: zip
+            asset_stem: agx-windows-x86_64
 
     steps:
       - name: Checkout code
@@ -42,37 +104,65 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Prepare binary asset (Unix)
+      # Packaging Unix (.tar.gz)
+      - name: Package Archive (Unix)
         if: runner.os != 'Windows'
         run: |
-          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} ${{ matrix.asset_name }}
-          chmod +x ${{ matrix.asset_name }}
+          PKG_DIR="package"
+          mkdir -p "$PKG_DIR"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "$PKG_DIR/agx"
+          chmod +x "$PKG_DIR/agx"
+          cp README.md LICENSE "$PKG_DIR/"
+          
+          ARCHIVE_NAME="${{ matrix.asset_stem }}.tar.gz"
+          tar -czvf "$ARCHIVE_NAME" -C "$PKG_DIR" .
+          shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256"
 
-      - name: Prepare binary asset (Windows)
+      # Packaging Windows (.zip)
+      - name: Package Archive (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          Copy-Item target/${{ matrix.target }}/release/${{ matrix.binary_name }} -Destination ${{ matrix.asset_name }}
+          $PKG_DIR = "package"
+          New-Item -ItemType Directory -Force -Path $PKG_DIR | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "$PKG_DIR/agx.exe"
+          Copy-Item README.md, LICENSE -Destination "$PKG_DIR/"
+          
+          $ARCHIVE_NAME = "${{ matrix.asset_stem }}.zip"
+          Compress-Archive -Path "$PKG_DIR/*" -DestinationPath $ARCHIVE_NAME -Force
+          $hash = (Get-FileHash -Path $ARCHIVE_NAME -Algorithm SHA256).Hash.ToLower()
+          "$hash  $ARCHIVE_NAME" | Out-File -FilePath "$ARCHIVE_NAME.sha256" -Encoding ascii
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}
+          name: ${{ matrix.asset_stem }}
+          path: |
+            ${{ matrix.asset_stem }}.${{ matrix.archive_ext }}
+            ${{ matrix.asset_stem }}.${{ matrix.archive_ext }}.sha256
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [tag-check, build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          merge-multiple: true
+
+      - name: Generate Consolidated SHA256SUMS.txt
+        run: |
+          cd release-assets
+          cat *.sha256 > SHA256SUMS.txt
+          rm -f *.sha256
+          ls -la
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.tag-check.outputs.tag_name }}
           files: release-assets/**/*
           draft: false
           prerelease: false

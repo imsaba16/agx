@@ -1,0 +1,81 @@
+name: Bug Report
+description: Report an issue, crash, or unexpected behavior in agx.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue in **Antigravity eXtension (`agx`)**!
+        Before submitting, please make sure this is not a security vulnerability. If you suspect a security issue, refer to [SECURITY.md](https://github.com/imsaba16/agx/blob/main/SECURITY.md) to report it privately.
+
+  - type: input
+    id: version
+    attributes:
+      label: agx Version
+      description: What version of agx are you using? (Run `agx --version`)
+      placeholder: "e.g., agx 1.0.0-rc.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Which operating system are you running?
+      options:
+        - macOS (Apple Silicon - ARM64)
+        - macOS (Intel - x86_64)
+        - Linux (Ubuntu / Debian)
+        - Linux (Arch / Fedora / Other)
+        - Windows 11 / 10
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      description: A clear and concise description of what happened.
+      placeholder: "When running `agx export` with `--compact`, the archive failed to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps or command line sequence to reproduce the problem.
+      placeholder: |
+        1. Run 'agx export <id> -o test.agbundle'
+        2. Run 'agx verify test.agbundle'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Logs & Output
+      description: Please paste command line output or error stack trace (run with `--verbose` if possible). Redact any private company secrets.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Sanity Checks
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate.
+          required: true
+        - label: I have verified that no sensitive credentials or private tokens are included in the logs above.
+          required: true
