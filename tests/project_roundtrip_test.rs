@@ -3,6 +3,7 @@ use agx::db::Database;
 use agx::models::{ConversationSummary, ProjectExportOptions, ProjectImportOptions};
 use agx::project_bundler::ProjectBundler;
 use agx::project_importer::ProjectImporter;
+use agx::remapper::{clean_path, to_file_uri};
 use rusqlite::Connection;
 use std::fs;
 use std::path::PathBuf;
@@ -47,8 +48,9 @@ fn test_project_export_import_roundtrip() {
     };
 
     let source_ws_dir = tempdir().unwrap();
-    let source_ws = source_ws_dir.path().canonicalize().unwrap();
+    let source_ws = clean_path(source_ws_dir.path());
     let source_ws_str = source_ws.to_string_lossy().to_string();
+    let source_uri = to_file_uri(&source_ws);
 
     // 1. Setup mock database
     let summaries_db = source_paths.summaries_db();
@@ -65,7 +67,7 @@ fn test_project_export_import_roundtrip() {
         preview: "Setting up project feature".to_string(),
         step_count: 25,
         last_modified_time: "2026-10-13T10:00:00Z".to_string(),
-        workspace_uris: format!(r#"["file://{}"]"#, source_ws_str),
+        workspace_uris: format!(r#"["{}"]"#, source_uri),
         status: "DONE".to_string(),
         source: "USER".to_string(),
         project_id: "test-proj".to_string(),
@@ -89,7 +91,7 @@ fn test_project_export_import_roundtrip() {
         preview: "Fixing edge cases".to_string(),
         step_count: 14,
         last_modified_time: "2026-10-13T11:00:00Z".to_string(),
-        workspace_uris: format!(r#"["file://{}"]"#, source_ws_str),
+        workspace_uris: format!(r#"["{}"]"#, source_uri),
         status: "DONE".to_string(),
         source: "USER".to_string(),
         project_id: "test-proj".to_string(),
@@ -120,17 +122,18 @@ fn test_project_export_import_roundtrip() {
     fs::create_dir_all(&brain1).unwrap();
     fs::write(
         brain1.join("implementation_plan.md"),
-        format!("# Plan 1\nWorkspace file: file://{}/src/app.rs\nAPI Key: sk-proj-1234567890abcdef12345678\n", source_ws_str),
-    ).unwrap();
+        format!(
+            "# Plan 1\nWorkspace file: {}/src/app.rs\nAPI Key: sk-proj-1234567890abcdef12345678\n",
+            source_uri
+        ),
+    )
+    .unwrap();
 
     let brain2 = source_paths.conversation_brain(conv2_id);
     fs::create_dir_all(&brain2).unwrap();
     fs::write(
         brain2.join("walkthrough.md"),
-        format!(
-            "# Walkthrough 2\nFixed bug in file://{}/src/lib.rs\n",
-            source_ws_str
-        ),
+        format!("# Walkthrough 2\nFixed bug in {}/src/lib.rs\n", source_uri),
     )
     .unwrap();
 
@@ -193,7 +196,7 @@ fn test_project_export_import_roundtrip() {
     setup_mock_db(&target_paths.summaries_db());
 
     let target_ws_dir = tempdir().unwrap();
-    let target_ws = target_ws_dir.path().canonicalize().unwrap();
+    let target_ws = clean_path(target_ws_dir.path());
 
     let dry_run_options = ProjectImportOptions {
         bundle_path: bundle_file.clone(),
@@ -227,9 +230,10 @@ fn test_project_export_import_roundtrip() {
     assert_eq!(list.len(), 2);
 
     let target_ws_str = target_ws.to_string_lossy().to_string();
+    let target_uri = to_file_uri(&target_ws);
     for conv in list {
-        assert!(conv.workspace_uris.contains(&target_ws_str));
-        assert!(!conv.workspace_uris.contains(&source_ws_str));
+        assert!(conv.workspace_uris.contains(&target_uri));
+        assert!(!conv.workspace_uris.contains(&source_uri));
     }
 
     // Verify brain files restored and sanitized + remapped
@@ -239,7 +243,8 @@ fn test_project_export_import_roundtrip() {
             .join("implementation_plan.md"),
     )
     .unwrap();
-    assert!(plan1.contains(&format!("file://{}/src/app.rs", target_ws_str)));
+    assert!(plan1.contains(&format!("{}/src/app.rs", target_uri)));
+    assert!(!plan1.contains(&source_uri));
     assert!(!plan1.contains(&source_ws_str));
     // Verify secret sanitization worked
     assert!(plan1.contains("[REDACTED_OPENAI_KEY]"));
@@ -253,7 +258,10 @@ fn test_project_export_import_roundtrip() {
         .join("SKILL.md");
     assert!(restored_skill.exists());
     let skill_text = fs::read_to_string(restored_skill).unwrap();
-    assert!(skill_text.contains(&target_ws_str));
+    assert!(
+        skill_text.contains(&target_ws_str)
+            || skill_text.contains(&target_ws_str.replace('\\', "/"))
+    );
 
     assert!(target_ws
         .join(".agents")
