@@ -60,3 +60,51 @@ pub struct ImportOptions {
     pub overwrite: bool,
     pub dry_run: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectCustomizations {
+    pub has_skills: bool,
+    pub skills_count: usize,
+    pub has_rules: bool,
+    pub has_mcp: bool,
+    pub has_hooks: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectManifest {
+    pub version: String,
+    pub created_at: String,
+    pub source_os: String,
+    pub source_username: String,
+    pub project_name: String,
+    pub original_workspace_path: String,
+    pub original_workspace_uri: String,
+    pub conversations: Vec<ConversationSummary>,
+    pub customizations: ProjectCustomizations,
+    pub sanitized: bool,
+    pub compact: bool,
+    pub total_artifacts_count: usize,
+    pub total_ignored_count: usize,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct ProjectExportOptions {
+    pub workspace_root: PathBuf,
+    pub output_path: PathBuf,
+    pub session_ids: Option<Vec<String>>,
+    pub include_customizations: bool,
+    pub sanitize: bool,
+    pub compact: bool,
+    pub custom_ignore_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectImportOptions {
+    pub bundle_path: PathBuf,
+    pub target_workspace: PathBuf,
+    pub overwrite: bool,
+    pub dry_run: bool,
+    pub restore_customizations: bool,
+}
+

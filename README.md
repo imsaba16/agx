@@ -113,10 +113,51 @@ agx import my_session.agbundle --overwrite
 
 ---
 
-## Bundle File Structure (`.agbundle`)
+### 5. Whole-Project Exchange (`agx project`)
+Share the **entire** development context of a repository in one package: all conversations, all brain artifacts, custom skills (`.agents/skills`), custom rules (`.agents/rules`), and MCP server configs (`.agents/mcp_config.json`).
 
-An `.agbundle` is a Zstandard-compressed tar archive containing:
+#### Export an Entire Project
+```bash
+# Export active workspace with all sessions, brains, skills, and MCP
+agx project export
 
+# Interactive session picker (select specific sessions to include)
+agx project export -i
+
+# Compact mode (strips bulky raw step logs across all sessions)
+agx project export --compact -o my_full_project.agproject
+
+# Skip workspace customizations if desired
+agx project export --no-customizations
+```
+
+#### Inspect a Project Bundle
+```bash
+agx project info my_full_project.agproject
+```
+Displays:
+* Project name, bundle version, creation timestamp, author host & OS
+* Packaged conversations list (titles, step counts, last modified dates)
+* Customizations included (skills count, rules, MCP servers)
+* Total artifacts count and excluded count
+
+#### Import an Entire Project
+```bash
+# Dry run preview
+agx project import my_full_project.agproject --dry-run
+
+# Import into current repository or a new target folder
+agx project import my_full_project.agproject --target-workspace ~/dev/my-repo
+
+# Overwrite existing sessions and customizations
+agx project import my_full_project.agproject --overwrite
+```
+
+---
+
+## Archive Formats
+
+### Single Session (`.agbundle`)
 ```
 feature_session.agbundle
 ├── manifest.json              # Source metadata, platform, author, original workspace paths
@@ -128,6 +169,23 @@ feature_session.agbundle
     └── .system_generated/
         └── logs/
             └── transcript.jsonl # Complete chat history & tool execution logs
+```
+
+### Whole Project (`.agproject`)
+```
+my_repo.agproject
+├── project_manifest.json      # Project manifest, sessions catalog, customizations summary
+├── sessions/
+│   ├── <uuid-1>/
+│   │   ├── conversation.db    # SQLite trajectory for session 1
+│   │   └── brain/             # Brain artifacts for session 1
+│   └── <uuid-2>/
+│       ├── conversation.db    # SQLite trajectory for session 2
+│       └── brain/             # Brain artifacts for session 2
+└── customizations/            # Project customizations
+    ├── .agents/skills/        # Workspace skills & instructions
+    ├── .agents/rules/         # Workspace rules
+    └── .agents/mcp_config.json # Workspace MCP server configuration
 ```
 
 ---

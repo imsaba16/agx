@@ -70,12 +70,15 @@ impl Importer {
                     fs::create_dir_all(parent)?;
                 }
 
-                if is_text_path(&path_buf) && options.target_workspace.is_some() {
-                    let mut text_buf = String::new();
-                    if entry.read_to_string(&mut text_buf).is_ok() {
-                        let target_ws = options.target_workspace.as_ref().unwrap();
-                        let remapped = PathRemapper::remap_import(&text_buf, target_ws);
-                        fs::write(&dest_file_path, remapped)?;
+                if is_text_path(&path_buf) {
+                    if let Some(ref target_ws) = options.target_workspace {
+                        let mut text_buf = String::new();
+                        if entry.read_to_string(&mut text_buf).is_ok() {
+                            let remapped = PathRemapper::remap_import(&text_buf, target_ws);
+                            fs::write(&dest_file_path, remapped)?;
+                        } else {
+                            entry.unpack(&dest_file_path)?;
+                        }
                     } else {
                         entry.unpack(&dest_file_path)?;
                     }

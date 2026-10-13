@@ -106,3 +106,33 @@ When the user asks to import a colleague's session or restore a backup:
    ```
 
 3. Inform the user that the session is now registered in Antigravity and visible in their conversation list.
+
+---
+
+### 5. Whole-Project Exchange (`agx project`)
+When the user asks to backup, export, or import the **entire project** (all conversations linked to the workspace, their brains, custom skills, rules, and MCP configs):
+
+1. **Export Whole Project**:
+   ```bash
+   # Auto-detects workspace, packages all sessions and .agents customizations
+   ~/.cargo/bin/agx project export --compact -o project_backup.agproject
+   ```
+   Or use the interactive session picker:
+   ```bash
+   ~/.cargo/bin/agx project export -i
+   ```
+
+2. **Inspect Project Bundle**:
+   ```bash
+   ~/.cargo/bin/agx project info <path-to-project.agproject>
+   ```
+
+3. **Import Whole Project**:
+   ```bash
+   # Preview with dry-run
+   ~/.cargo/bin/agx project import <path-to-project.agproject> --dry-run
+
+   # Restore into target repository
+   ~/.cargo/bin/agx project import <path-to-project.agproject> --target-workspace <target-repo>
+   ```
+

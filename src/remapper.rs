@@ -7,6 +7,8 @@ pub struct PathRemapper {
     fs_path: String,
     fs_path_alt: String,
     uri_path: String,
+    raw_fs_path: String,
+    raw_uri_path: String,
 }
 
 impl PathRemapper {
@@ -22,16 +24,21 @@ impl PathRemapper {
         };
 
         let uri_path = to_file_uri(&cleaned);
+        let raw_fs_path = workspace_root.to_string_lossy().to_string();
+        let raw_uri_path = to_file_uri(workspace_root);
 
         Self {
             fs_path,
             fs_path_alt,
             uri_path,
+            raw_fs_path,
+            raw_uri_path,
         }
     }
 
     pub fn remap_export(&self, content: &str) -> String {
         let mut result = content.replace(&self.uri_path, WORKSPACE_URI_PLACEHOLDER);
+        result = result.replace(&self.raw_uri_path, WORKSPACE_URI_PLACEHOLDER);
         
         // Also try matching standard file:/// without extra slashes if different
         let alt_uri = format!("file://{}", self.fs_path_alt);
@@ -39,9 +46,16 @@ impl PathRemapper {
             result = result.replace(&alt_uri, WORKSPACE_URI_PLACEHOLDER);
         }
 
+        // If on macOS, strip /private prefix variant
+        if let Some(stripped) = self.fs_path.strip_prefix("/private") {
+            result = result.replace(&format!("file://{}", stripped), WORKSPACE_URI_PLACEHOLDER);
+            result = result.replace(stripped, WORKSPACE_PLACEHOLDER);
+        }
+
         // Replace both backslash and forward slash variants of the local path
         result = result.replace(&self.fs_path, WORKSPACE_PLACEHOLDER);
         result = result.replace(&self.fs_path_alt, WORKSPACE_PLACEHOLDER);
+        result = result.replace(&self.raw_fs_path, WORKSPACE_PLACEHOLDER);
         result
     }
 
@@ -107,6 +121,8 @@ mod tests {
             fs_path: "/Users/sanjays/project".to_string(),
             fs_path_alt: "/Users/sanjays/project".to_string(),
             uri_path: "file:///Users/sanjays/project".to_string(),
+            raw_fs_path: "/Users/sanjays/project".to_string(),
+            raw_uri_path: "file:///Users/sanjays/project".to_string(),
         };
 
         let mac_text = "See file:///Users/sanjays/project/src/main.rs and /Users/sanjays/project/Cargo.toml";
@@ -133,6 +149,8 @@ mod tests {
             fs_path: "C:\\Users\\Alice\\project".to_string(),
             fs_path_alt: "C:/Users/Alice/project".to_string(),
             uri_path: "file:///C:/Users/Alice/project".to_string(),
+            raw_fs_path: "C:\\Users\\Alice\\project".to_string(),
+            raw_uri_path: "file:///C:/Users/Alice/project".to_string(),
         };
 
         let win_text = "See file:///C:/Users/Alice/project/src/main.rs and C:\\Users\\Alice\\project\\Cargo.toml";

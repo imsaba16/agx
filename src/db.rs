@@ -73,6 +73,40 @@ impl Database {
         Ok(results)
     }
 
+    pub fn find_conversations_for_workspace(&self, workspace_path: &Path) -> Result<Vec<ConversationSummary>> {
+        let raw_path = workspace_path.to_path_buf();
+        let cleaned = crate::remapper::clean_path(workspace_path);
+
+        let mut terms = vec![
+            raw_path.to_string_lossy().to_string(),
+            cleaned.to_string_lossy().to_string(),
+            crate::remapper::to_file_uri(&raw_path),
+            crate::remapper::to_file_uri(&cleaned),
+        ];
+
+        // On macOS, canonicalization prepends /private to /var/folders or /tmp
+        if let Some(stripped) = cleaned.to_str().and_then(|s| s.strip_prefix("/private")) {
+            terms.push(stripped.to_string());
+            terms.push(format!("file://{}", stripped));
+        }
+
+        let mut all_terms = Vec::new();
+        for t in &terms {
+            all_terms.push(t.clone());
+            all_terms.push(t.replace('\\', "/"));
+        }
+
+        let all = self.list_conversations()?;
+        let filtered = all
+            .into_iter()
+            .filter(|c| {
+                all_terms.iter().any(|term| c.workspace_uris.contains(term))
+            })
+            .collect();
+
+        Ok(filtered)
+    }
+
     pub fn get_conversation(&self, conv_id: &str) -> Result<Option<ConversationSummary>> {
         let conn = self.open_read_only()?;
         let mut stmt = conn.prepare(
