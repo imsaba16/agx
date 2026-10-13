@@ -15,16 +15,20 @@ impl Database {
     }
 
     fn open_read_only(&self) -> Result<Connection> {
-        Connection::open_with_flags(&self.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .with_context(|| format!("Failed to open database at {:?} (read-only)", self.db_path))
+        let conn = Connection::open_with_flags(&self.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .with_context(|| format!("Failed to open database at {:?} (read-only)", self.db_path))?;
+        let _ = conn.execute_batch("PRAGMA busy_timeout = 5000;");
+        Ok(conn)
     }
 
     fn open_read_write(&self) -> Result<Connection> {
-        Connection::open_with_flags(
+        let conn = Connection::open_with_flags(
             &self.db_path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )
-        .with_context(|| format!("Failed to open database at {:?}", self.db_path))
+        .with_context(|| format!("Failed to open database at {:?}", self.db_path))?;
+        let _ = conn.execute_batch("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
+        Ok(conn)
     }
 
     pub fn list_conversations(&self) -> Result<Vec<ConversationSummary>> {

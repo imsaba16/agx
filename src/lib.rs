@@ -8,3 +8,4 @@ pub mod project_bundler;
 pub mod project_importer;
 pub mod remapper;
 pub mod sanitizer;
+pub mod security;

@@ -118,9 +118,31 @@ agx import my_session.agbundle --target-workspace ~/Documents/projects/my-repo
 agx import my_session.agbundle --overwrite
 ```
 
+### 5. Verify Cryptographic Integrity & Security Audit (`verify`)
+Audit any `.agbundle` or `.agproject` before importing or sharing. Verifies SHA-256 cryptographic checksums, scans for Zip-Slip / path traversal vulnerabilities, validates permission modes, and checks decompression limits:
+
+```bash
+# Perform a security & integrity audit
+agx verify my_session.agbundle
+
+# Verify a whole-project archive (.agproject)
+agx verify my_full_project.agproject
+
+# Output machine-readable JSON for CI/CD or security pipelines
+agx verify my_session.agbundle --json
+```
+
+**Security Safeguards Enforced**:
+* **SHA-256 Hashes**: Every file in the archive is cryptographically verified against the manifest before extraction.
+* **Anti-Zip-Slip Defense**: Path traversal attacks (`../../` or absolute roots) are strictly rejected.
+* **Decompression Bomb Guard**: Defends against zip-bombs by enforcing limits (max 100MB per file, max 2GB total archive, max 5,000 files).
+* **Atomic Staging & Rollback**: Imports extract into an isolated temporary directory first. If any step fails, changes are cleanly discarded without leaving broken or partial state.
+* **Permission Normalization**: Unsafe setuid/setgid/sticky bits are stripped; files are sanitized to standard `0o644` / `0o755`.
+* **SQLite Hardening**: Uses Write-Ahead Logging (WAL mode), `busy_timeout = 5000ms`, and transactional commits to eliminate database locks.
+
 ---
 
-### 5. Whole-Project Exchange (`agx project`)
+### 6. Whole-Project Exchange (`agx project`)
 Share the **entire** development context of a repository in one package: all conversations, all brain artifacts, custom skills (`.agents/skills`), custom rules (`.agents/rules`), and MCP server configs (`.agents/mcp_config.json`).
 
 #### Export an Entire Project
@@ -162,7 +184,7 @@ agx project import my_full_project.agproject --overwrite
 
 ---
 
-### 6. Shell Autocompletions (`completion`)
+### 7. Shell Autocompletions (`completion`)
 Generate native shell tab-completions for your shell:
 
 ```bash

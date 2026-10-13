@@ -104,6 +104,16 @@ enum Commands {
         dry_run: bool,
     },
 
+    /// Verify cryptographic integrity (SHA-256) and security safety of an archive (.agbundle or .agproject)
+    Verify {
+        /// Path to the archive file (.agbundle or .agproject)
+        bundle: PathBuf,
+
+        /// Output verification report in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Whole-project operations: export/import all sessions, brain artifacts, skills, and MCP configs
     Project {
         #[command(subcommand)]
@@ -223,6 +233,9 @@ fn main() -> Result<()> {
         }) => {
             handle_import(&paths, bundle, target_workspace, overwrite, dry_run)?;
         }
+        Some(Commands::Verify { bundle, json }) => {
+            handle_verify(&bundle, json)?;
+        }
         Some(Commands::Project { action }) => match action {
             ProjectCommands::Export {
                 workspace,
@@ -290,7 +303,8 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
             "🗂️ 6. Export entire project (.agproject)",
             "🔎 7. Inspect an .agproject file",
             "📥 8. Import an .agproject file",
-            "🚪 9. Exit",
+            "🛡️ 9. Verify bundle integrity & security (.agbundle / .agproject)",
+            "🚪 10. Exit",
         ];
 
         let selection = match inquire::Select::new("What would you like to do?", options).prompt() {
@@ -348,6 +362,12 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 Some(PathBuf::from(ws_path_str))
             };
             let _ = handle_project_import(paths, PathBuf::from(bundle_path_str), target_ws, false, true, false);
+        } else if selection.starts_with("🛡️ 9") {
+            let path_str = match inquire::Text::new("Enter path to .agbundle or .agproject to verify:").prompt() {
+                Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
+                _ => continue,
+            };
+            let _ = handle_verify(Path::new(&path_str), false);
         } else {
             break;
         }
@@ -689,6 +709,93 @@ fn handle_import(
     println!();
 
     Ok(())
+}
+
+fn handle_verify(bundle_path: &Path, json: bool) -> Result<()> {
+    if !bundle_path.exists() {
+        anyhow::bail!("Bundle file does not exist: {:?}", bundle_path);
+    }
+
+    let is_project = is_project_archive(bundle_path);
+
+    let (report, archive_type) = if is_project {
+        (
+            ProjectBundler::verify_project_bundle(bundle_path)?,
+            "Project Archive (.agproject)",
+        )
+    } else {
+        (
+            Bundler::verify_bundle(bundle_path)?,
+            "Conversation Bundle (.agbundle)",
+        )
+    };
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        if !report.is_valid {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    println!("\n{}", "🛡️  AGX Bundle Integrity & Security Audit".bold().cyan());
+    println!("{}", "================================================".dimmed());
+    println!("  Archive File   : {:?}", bundle_path);
+    println!("  Archive Format : {}", archive_type.bold());
+    println!("  Files Checked  : {}", report.total_files_checked.to_string().cyan());
+    println!("  Valid Hashes   : {}", report.matched_checksums.to_string().green().bold());
+
+    if report.is_valid {
+        println!("\n{}", "✅ INTEGRITY AUDIT PASSED".bold().green());
+        println!("  • SHA-256 Checksums : Verified all recorded files match cryptographic hashes.");
+        println!("  • Path Traversal    : No Zip-Slip or illegal path traversal vectors detected.");
+        println!("  • Resource Limits   : Decompression bomb safeguards enforced & verified.");
+        println!("  • File Modes        : Sanitized permissions (0o644 / 0o755).\n");
+    } else {
+        println!("\n{}", "❌ INTEGRITY AUDIT FAILED".bold().red());
+        if !report.mismatched_files.is_empty() {
+            println!("\n{}", "  Mismatched Checksums (File Tampering Detected):".red().bold());
+            for f in &report.mismatched_files {
+                println!("    - {}", f.red());
+            }
+        }
+        if !report.missing_files.is_empty() {
+            println!("\n{}", "  Missing Files (Declared in manifest but not found):".yellow().bold());
+            for f in &report.missing_files {
+                println!("    - {}", f.yellow());
+            }
+        }
+        if !report.errors.is_empty() {
+            println!("\n{}", "  Security / Malformation Errors:".red().bold());
+            for err in &report.errors {
+                println!("    - {}", err.red());
+            }
+        }
+        println!();
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn is_project_archive(path: &Path) -> bool {
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        if ext.eq_ignore_ascii_case("agproject") {
+            return true;
+        }
+    }
+    if let Ok(mut archive) = agx::bundler::open_archive(path) {
+        if let Ok(entries) = archive.entries() {
+            for entry in entries.flatten() {
+                if let Ok(p) = entry.path() {
+                    if p.to_string_lossy() == "project_manifest.json" {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 fn select_project_conversations_interactively(

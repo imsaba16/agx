@@ -19,6 +19,7 @@ pub struct ProjectBundler;
 struct ArchiveEntry {
     tar_path: String,
     data: Vec<u8>,
+    sha256: String,
 }
 
 impl ProjectBundler {
@@ -202,9 +203,19 @@ impl ProjectBundler {
                     std::fs::read(&src_path)?
                 };
 
-                Ok(ArchiveEntry { tar_path, data })
+                let sha256 = crate::security::compute_sha256(&data);
+
+                Ok(ArchiveEntry { tar_path, data, sha256 })
             })
             .collect();
+
+        let mut checksums = std::collections::HashMap::new();
+        let mut verified_entries = Vec::new();
+        for entry_res in processed_entries {
+            let entry = entry_res?;
+            checksums.insert(entry.tar_path.clone(), entry.sha256.clone());
+            verified_entries.push(entry);
+        }
 
         let cleaned_root = crate::remapper::clean_path(ws_root);
         let manifest = ProjectManifest {
@@ -221,6 +232,7 @@ impl ProjectBundler {
             compact: options.compact,
             total_artifacts_count,
             total_ignored_count,
+            checksums,
         };
 
         // Write Zstandard archive
@@ -238,8 +250,7 @@ impl ProjectBundler {
         tar.append_data(&mut header, "project_manifest.json", &manifest_bytes[..])?;
 
         // 2. Write all processed entries
-        for entry_res in processed_entries {
-            let entry = entry_res?;
+        for entry in verified_entries {
             let mut file_header = Header::new_gnu();
             file_header.set_size(entry.data.len() as u64);
             file_header.set_mode(0o644);
@@ -256,6 +267,80 @@ impl ProjectBundler {
         }
 
         Ok(manifest)
+    }
+
+    pub fn verify_project_bundle(bundle_path: &Path) -> Result<crate::security::VerificationReport> {
+        let manifest = Self::inspect_project_bundle(bundle_path)?;
+        let mut archive = crate::bundler::open_archive(bundle_path)?;
+
+        let mut limit_guard = crate::security::TarLimitGuard::default();
+        let mut checked = 0;
+        let mut matched = 0;
+        let mut mismatched = Vec::new();
+        let mut errors = Vec::new();
+        let mut seen_entries = std::collections::HashSet::new();
+
+        for entry_res in archive.entries()? {
+            let mut entry = match entry_res {
+                Ok(e) => e,
+                Err(err) => {
+                    errors.push(format!("Archive entry read error: {}", err));
+                    continue;
+                }
+            };
+
+            let path_buf = entry.path()?.to_path_buf();
+            let path_str = path_buf.to_string_lossy().replace('\\', "/");
+
+            if let Err(e) = crate::security::SafePathValidator::validate_and_resolve(Path::new("."), &path_buf) {
+                errors.push(format!("Path traversal vulnerability detected in entry '{}': {}", path_str, e));
+            }
+
+            let entry_len = entry.header().size()?;
+            if let Err(e) = limit_guard.check_and_add(entry_len) {
+                errors.push(format!("Resource limit breached in entry '{}': {}", path_str, e));
+            }
+
+            if path_str == "project_manifest.json" {
+                continue;
+            }
+
+            seen_entries.insert(path_str.clone());
+            checked += 1;
+
+            if let Some(expected_sha) = manifest.checksums.get(&path_str) {
+                let mut data = Vec::new();
+                entry.read_to_end(&mut data)?;
+                let actual_sha = crate::security::compute_sha256(&data);
+
+                if actual_sha == *expected_sha {
+                    matched += 1;
+                } else {
+                    mismatched.push(format!(
+                        "{} (expected: {}, actual: {})",
+                        path_str, expected_sha, actual_sha
+                    ));
+                }
+            }
+        }
+
+        let mut missing = Vec::new();
+        for expected_path in manifest.checksums.keys() {
+            if !seen_entries.contains(expected_path) {
+                missing.push(expected_path.clone());
+            }
+        }
+
+        let is_valid = mismatched.is_empty() && missing.is_empty() && errors.is_empty();
+
+        Ok(crate::security::VerificationReport {
+            is_valid,
+            total_files_checked: checked,
+            matched_checksums: matched,
+            mismatched_files: mismatched,
+            missing_files: missing,
+            errors,
+        })
     }
 
     pub fn inspect_project_bundle(bundle_path: &Path) -> Result<ProjectManifest> {

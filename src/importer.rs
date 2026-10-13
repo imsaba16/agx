@@ -30,41 +30,45 @@ impl Importer {
             return Ok((final_id, manifest));
         }
 
-        // Ensure directories exist
-        fs::create_dir_all(paths.conversations_dir())?;
-        fs::create_dir_all(paths.brain_dir())?;
-
-        let target_brain_dir = paths.conversation_brain(&final_id);
-        fs::create_dir_all(&target_brain_dir)?;
-
-        let mut updated_summary = manifest.conversation.clone();
-        updated_summary.conversation_id = final_id.clone();
-
-        if already_exists && !options.overwrite {
-            updated_summary.title = format!("{} (Imported)", updated_summary.title);
+        // 1. Verify bundle integrity & security before modifying anything
+        let verification = crate::bundler::Bundler::verify_bundle(&options.bundle_path)?;
+        if !verification.is_valid {
+            anyhow::bail!(
+                "Security check failed: Bundle integrity check failed. Errors: {:?}, Mismatches: {:?}",
+                verification.errors,
+                verification.mismatched_files
+            );
         }
 
-        if let Some(ref target_ws) = options.target_workspace {
-            updated_summary.workspace_uris =
-                PathRemapper::remap_workspace_uris_import(&updated_summary.workspace_uris, target_ws);
-        }
+        // 2. Setup atomic staging directory
+        let parent_dir = paths.base_dir.parent().unwrap_or(&paths.base_dir);
+        let staging_dir = tempfile::tempdir_in(parent_dir)?;
+        let staging_brain = staging_dir.path().join("brain");
+        let staging_conv_db = staging_dir.path().join("conversation.db");
+        fs::create_dir_all(&staging_brain)?;
 
-        // Re-read archive to extract files using universal loader
+        let mut limit_guard = crate::security::TarLimitGuard::default();
+
+        // 3. Extract and remap into atomic staging directory
         let mut archive = crate::bundler::open_archive(&options.bundle_path)?;
+        let mut has_conv_db = false;
 
         for entry_res in archive.entries()? {
             let mut entry = entry_res?;
             let path_buf = entry.path()?.to_path_buf();
-            let path_str = path_buf.to_string_lossy().to_string();
+            let path_str = path_buf.to_string_lossy().replace('\\', "/");
+
+            let entry_len = entry.header().size()?;
+            limit_guard.check_and_add(entry_len)?;
 
             if path_str == "manifest.json" {
                 continue;
             } else if path_str == "conversation.db" {
-                let dest_db_path = paths.conversation_db(&final_id);
-                entry.unpack(&dest_db_path)?;
+                entry.unpack(&staging_conv_db)?;
+                has_conv_db = true;
             } else if path_str.starts_with("brain/") {
                 let rel = path_buf.strip_prefix("brain")?;
-                let dest_file_path = target_brain_dir.join(rel);
+                let dest_file_path = crate::security::SafePathValidator::validate_and_resolve(&staging_brain, rel)?;
 
                 if let Some(parent) = dest_file_path.parent() {
                     fs::create_dir_all(parent)?;
@@ -88,8 +92,42 @@ impl Importer {
             }
         }
 
-        // Update database
+        // 4. Atomically commit staged files into final destinations
+        fs::create_dir_all(paths.conversations_dir())?;
+        fs::create_dir_all(paths.brain_dir())?;
+
+        let target_brain_dir = paths.conversation_brain(&final_id);
+        if target_brain_dir.exists() {
+            fs::remove_dir_all(&target_brain_dir)?;
+        }
+        // Move staging brain directory to target
+        fs::rename(&staging_brain, &target_brain_dir).or_else(|_| {
+            // Fallback for cross-filesystem moves
+            copy_dir_recursive(&staging_brain, &target_brain_dir)
+        })?;
+
+        if has_conv_db {
+            let dest_db_path = paths.conversation_db(&final_id);
+            if dest_db_path.exists() {
+                fs::remove_file(&dest_db_path)?;
+            }
+            fs::rename(&staging_conv_db, &dest_db_path).or_else(|_| {
+                fs::copy(&staging_conv_db, &dest_db_path).map(|_| ())
+            })?;
+        }
+
+        // 5. Update database
         if paths.summaries_db().exists() {
+            let mut updated_summary = manifest.conversation.clone();
+            updated_summary.conversation_id = final_id.clone();
+            if already_exists && !options.overwrite {
+                updated_summary.title = format!("{} (Imported)", updated_summary.title);
+            }
+            if let Some(ref target_ws) = options.target_workspace {
+                updated_summary.workspace_uris =
+                    PathRemapper::remap_workspace_uris_import(&updated_summary.workspace_uris, target_ws);
+            }
+
             let db = Database::new(&paths.summaries_db());
             db.upsert_conversation(&updated_summary)?;
         }
@@ -105,3 +143,19 @@ fn is_text_path(path: &Path) -> bool {
         "md" | "json" | "jsonl" | "txt" | "py" | "rs" | "ts" | "js" | "sh" | "html" | "css" | "yml" | "yaml" | "toml" | "xml"
     )
 }
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+

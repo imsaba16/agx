@@ -145,3 +145,26 @@ When the user asks to backup, export, or import the **entire project** (all conv
    ~/.cargo/bin/agx project import <path-to-project.agproject> --target-workspace <target-repo>
    ```
 
+---
+
+### 6. Verify Archive Integrity & Security (`verify`)
+When the user asks to audit or verify an archive before importing or sharing:
+
+```bash
+# Verify a single session bundle (.agbundle)
+~/.cargo/bin/agx verify <path-to-bundle.agbundle>
+
+# Verify a whole-project archive (.agproject)
+~/.cargo/bin/agx verify <path-to-project.agproject>
+
+# Output JSON
+~/.cargo/bin/agx verify <path-to-bundle.agbundle> --json
+```
+
+Reports:
+- SHA-256 cryptographic hash matches across all files
+- Path traversal (Zip-Slip) safety
+- Archive resource limits (decompression bomb protection)
+- Permission sanitization
+
+

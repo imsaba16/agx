@@ -16,6 +16,7 @@ pub struct Bundler;
 struct ProcessedFile {
     tar_entry_name: String,
     data: Vec<u8>,
+    sha256: String,
 }
 
 impl Bundler {
@@ -73,7 +74,7 @@ impl Bundler {
 
         let has_db = conv_db_path.exists();
 
-        let manifest = BundleManifest {
+        let mut manifest = BundleManifest {
             version: "1.0".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             source_os: std::env::consts::OS.to_string(),
@@ -85,6 +86,7 @@ impl Bundler {
             artifacts_count,
             ignored_count,
             has_db,
+            checksums: std::collections::HashMap::new(),
         };
 
         let spinner = if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
@@ -132,12 +134,36 @@ impl Bundler {
                     std::fs::read(&entry_path)?
                 };
 
+                let sha256 = crate::security::compute_sha256(&data);
+
                 Ok(ProcessedFile {
                     tar_entry_name,
                     data,
+                    sha256,
                 })
             })
             .collect();
+
+        // Compute checksums for all archive files
+        let mut checksums = std::collections::HashMap::new();
+        let mut db_bytes_opt = None;
+        if has_db {
+            let mut db_file = File::open(&conv_db_path)?;
+            let mut db_bytes = Vec::new();
+            db_file.read_to_end(&mut db_bytes)?;
+            let db_sha = crate::security::compute_sha256(&db_bytes);
+            checksums.insert("conversation.db".to_string(), db_sha);
+            db_bytes_opt = Some(db_bytes);
+        }
+
+        let mut verified_pfs = Vec::new();
+        for pf_res in processed_files {
+            let pf = pf_res?;
+            checksums.insert(pf.tar_entry_name.clone(), pf.sha256.clone());
+            verified_pfs.push(pf);
+        }
+
+        manifest.checksums = checksums;
 
         // Create zstd compressed archive (level 3 for ultra-fast compression and high ratio)
         let file = File::create(&options.output_path)
@@ -154,10 +180,7 @@ impl Bundler {
         tar.append_data(&mut header, "manifest.json", &manifest_bytes[..])?;
 
         // 2. Write conversation.db if exists
-        if has_db {
-            let mut db_file = File::open(&conv_db_path)?;
-            let mut db_bytes = Vec::new();
-            db_file.read_to_end(&mut db_bytes)?;
+        if let Some(db_bytes) = db_bytes_opt {
             let mut db_header = Header::new_gnu();
             db_header.set_size(db_bytes.len() as u64);
             db_header.set_mode(0o644);
@@ -166,8 +189,7 @@ impl Bundler {
         }
 
         // 3. Write parallel-processed brain files
-        for pf_res in processed_files {
-            let pf = pf_res?;
+        for pf in verified_pfs {
             let mut file_header = Header::new_gnu();
             file_header.set_size(pf.data.len() as u64);
             file_header.set_mode(0o644);
@@ -184,6 +206,80 @@ impl Bundler {
         }
 
         Ok(manifest)
+    }
+
+    pub fn verify_bundle(bundle_path: &Path) -> Result<crate::security::VerificationReport> {
+        let manifest = Self::inspect_bundle(bundle_path)?;
+        let mut archive = open_archive(bundle_path)?;
+
+        let mut limit_guard = crate::security::TarLimitGuard::default();
+        let mut checked = 0;
+        let mut matched = 0;
+        let mut mismatched = Vec::new();
+        let mut errors = Vec::new();
+        let mut seen_entries = std::collections::HashSet::new();
+
+        for entry_res in archive.entries()? {
+            let mut entry = match entry_res {
+                Ok(e) => e,
+                Err(err) => {
+                    errors.push(format!("Archive entry read error: {}", err));
+                    continue;
+                }
+            };
+
+            let path_buf = entry.path()?.to_path_buf();
+            let path_str = path_buf.to_string_lossy().replace('\\', "/");
+
+            if let Err(e) = crate::security::SafePathValidator::validate_and_resolve(Path::new("."), &path_buf) {
+                errors.push(format!("Path traversal vulnerability detected in entry '{}': {}", path_str, e));
+            }
+
+            let entry_len = entry.header().size()?;
+            if let Err(e) = limit_guard.check_and_add(entry_len) {
+                errors.push(format!("Resource limit breached in entry '{}': {}", path_str, e));
+            }
+
+            if path_str == "manifest.json" {
+                continue;
+            }
+
+            seen_entries.insert(path_str.clone());
+            checked += 1;
+
+            if let Some(expected_sha) = manifest.checksums.get(&path_str) {
+                let mut data = Vec::new();
+                entry.read_to_end(&mut data)?;
+                let actual_sha = crate::security::compute_sha256(&data);
+
+                if actual_sha == *expected_sha {
+                    matched += 1;
+                } else {
+                    mismatched.push(format!(
+                        "{} (expected: {}, actual: {})",
+                        path_str, expected_sha, actual_sha
+                    ));
+                }
+            }
+        }
+
+        let mut missing = Vec::new();
+        for expected_path in manifest.checksums.keys() {
+            if !seen_entries.contains(expected_path) {
+                missing.push(expected_path.clone());
+            }
+        }
+
+        let is_valid = mismatched.is_empty() && missing.is_empty() && errors.is_empty();
+
+        Ok(crate::security::VerificationReport {
+            is_valid,
+            total_files_checked: checked,
+            matched_checksums: matched,
+            mismatched_files: mismatched,
+            missing_files: missing,
+            errors,
+        })
     }
 
     pub fn inspect_bundle(bundle_path: &Path) -> Result<BundleManifest> {

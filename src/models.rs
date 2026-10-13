@@ -40,6 +40,8 @@ pub struct BundleManifest {
     pub artifacts_count: usize,
     pub ignored_count: usize,
     pub has_db: bool,
+    #[serde(default)]
+    pub checksums: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +87,8 @@ pub struct ProjectManifest {
     pub compact: bool,
     pub total_artifacts_count: usize,
     pub total_ignored_count: usize,
+    #[serde(default)]
+    pub checksums: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
