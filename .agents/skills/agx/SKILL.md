@@ -167,4 +167,26 @@ Reports:
 - Archive resource limits (decompression bomb protection)
 - Permission sanitization
 
+---
+
+### 7. Power-User Commands (`diff`, `search`, `extract`, `cat`, `explore`)
+
+```bash
+# Compare plans between two archives or against current workspace
+~/.cargo/bin/agx diff <bundle_a> [bundle_b] [--local]
+
+# Zero-decompression full-text search across bundles or local sessions
+~/.cargo/bin/agx search "<query>" [--local] [--dir <path>]
+
+# Surgically extract files (plan, walkthrough, transcript) without importing
+~/.cargo/bin/agx extract <bundle> --pattern plan -o ./recovered_plan.md
+
+# Print archived file contents directly to stdout
+~/.cargo/bin/agx cat <bundle> plan | less
+
+# Launch full-screen interactive split-pane TUI explorer
+~/.cargo/bin/agx explore
+```
+
+
 

@@ -114,6 +114,67 @@ enum Commands {
         json: bool,
     },
 
+    /// Compare context or implementation plans between two archives or against local workspace
+    Diff {
+        /// First archive to compare (.agbundle or .agproject)
+        bundle_a: PathBuf,
+
+        /// Second archive to compare against (optional if comparing against local workspace)
+        bundle_b: Option<PathBuf>,
+
+        /// Specific file pattern to diff (defaults to 'plan' / implementation_plan.md)
+        #[arg(short, long)]
+        file: Option<String>,
+
+        /// Compare bundle_a against the active local workspace's counterpart
+        #[arg(long)]
+        local: bool,
+    },
+
+    /// Search across archived bundles or local sessions without decompressing to disk
+    Search {
+        /// Search query or keyword
+        query: String,
+
+        /// Directory containing archives to search (defaults to current directory)
+        #[arg(short, long)]
+        dir: Option<PathBuf>,
+
+        /// Also search across local Antigravity brain storage
+        #[arg(long)]
+        local: bool,
+
+        /// Case-sensitive matching
+        #[arg(short = 'c', long)]
+        case_sensitive: bool,
+    },
+
+    /// Surgically extract specific files (e.g. plan, walkthrough) from an archive without importing
+    Extract {
+        /// Path to the archive file (.agbundle or .agproject)
+        bundle: PathBuf,
+
+        /// File pattern to extract (e.g. 'plan', 'walkthrough', 'transcript', or filename)
+        #[arg(short, long)]
+        pattern: Option<String>,
+
+        /// Destination output file or folder
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Print contents of an archived file directly to stdout (ideal for pipes, grep, or pager)
+    Cat {
+        /// Path to the archive file (.agbundle or .agproject)
+        bundle: PathBuf,
+
+        /// File to print (e.g. 'plan', 'walkthrough', 'manifest', 'transcript')
+        pattern: String,
+    },
+
+    /// Launch full-screen interactive split-pane TUI explorer & markdown previewer
+    Explore,
+
     /// Whole-project operations: export/import all sessions, brain artifacts, skills, and MCP configs
     Project {
         #[command(subcommand)]
@@ -236,6 +297,64 @@ fn main() -> Result<()> {
         Some(Commands::Verify { bundle, json }) => {
             handle_verify(&bundle, json)?;
         }
+        Some(Commands::Diff {
+            bundle_a,
+            bundle_b,
+            file,
+            local,
+        }) => {
+            if local || bundle_b.is_none() {
+                let ws = std::env::current_dir()?;
+                agx::diff::DiffEngine::diff_with_local(&bundle_a, &ws, &paths, file.as_deref())?;
+            } else if let Some(b) = bundle_b {
+                agx::diff::DiffEngine::diff_bundles(&bundle_a, &b, file.as_deref())?;
+            }
+        }
+        Some(Commands::Search {
+            query,
+            dir,
+            local,
+            case_sensitive,
+        }) => {
+            let search_dir = dir.unwrap_or_else(|| PathBuf::from("."));
+            let archive_hits =
+                agx::search::SearchEngine::search_archives(&query, &search_dir, case_sensitive)?;
+            let mut total_hits = archive_hits;
+
+            if local {
+                let local_hits =
+                    agx::search::SearchEngine::search_local(&query, &paths, case_sensitive)?;
+                total_hits.extend(local_hits);
+            }
+
+            agx::search::SearchEngine::print_hits(&query, &total_hits);
+        }
+        Some(Commands::Extract {
+            bundle,
+            pattern,
+            output,
+        }) => {
+            let extracted =
+                agx::extract::Extractor::extract(&bundle, pattern.as_deref(), output.as_deref())?;
+            println!(
+                "\n{}",
+                format!("✔ Successfully extracted {} file(s):", extracted.len())
+                    .green()
+                    .bold()
+            );
+            for p in extracted {
+                println!("  - {:?}", p);
+            }
+            println!();
+        }
+        Some(Commands::Cat { bundle, pattern }) => {
+            let (_, bytes) = agx::extract::Extractor::read_file_content(&bundle, &pattern)?;
+            let text = String::from_utf8_lossy(&bytes);
+            print!("{}", text);
+        }
+        Some(Commands::Explore) => {
+            agx::explorer::run_explorer(&paths)?;
+        }
         Some(Commands::Project { action }) => match action {
             ProjectCommands::Export {
                 workspace,
@@ -319,6 +438,11 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
 
     let actions = [
         ActionItem {
+            id: "explore",
+            title: "Split-Screen TUI Explorer",
+            desc: "Interactive session navigator & live preview",
+        },
+        ActionItem {
             id: "export_active",
             title: "Export active session",
             desc: "Package current conversation into .agbundle",
@@ -332,6 +456,21 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
             id: "browse_export",
             title: "Browse & export past sessions",
             desc: "Interactive session picker with search",
+        },
+        ActionItem {
+            id: "diff",
+            title: "Diff context against local/archive",
+            desc: "Visual side-by-side plan changes",
+        },
+        ActionItem {
+            id: "search",
+            title: "Search session contents",
+            desc: "Zero-decompression grep across archives",
+        },
+        ActionItem {
+            id: "extract",
+            title: "Extract specific artifact",
+            desc: "Extract plan, walkthrough, or transcript",
         },
         ActionItem {
             id: "inspect",
@@ -363,7 +502,7 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
     loop {
         let selection = match inquire::Select::new("Select an action:", actions.iter().collect())
             .with_render_config(render_config)
-            .with_page_size(10)
+            .with_page_size(12)
             .prompt()
         {
             Ok(s) => s.id,
@@ -371,6 +510,9 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
         };
 
         match selection {
+            "explore" => {
+                let _ = agx::explorer::run_explorer(paths);
+            }
             "export_active" => {
                 let compact_prompt = inquire::Select::new(
                     "Select export mode:",
@@ -411,6 +553,59 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
             }
             "browse_export" => {
                 let _ = handle_export(paths, None, None, None, true, false, true, None);
+            }
+            "diff" => {
+                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to compare:") {
+                    let _ = agx::diff::DiffEngine::diff_with_local(&archive_path, &cwd, paths, None);
+                }
+            }
+            "search" => {
+                let query_ans = inquire::Text::new("Enter search query or keyword:")
+                    .with_render_config(render_config)
+                    .prompt();
+                if let Ok(query) = query_ans {
+                    if !query.trim().is_empty() {
+                        let mut hits = agx::search::SearchEngine::search_archives(query.trim(), &cwd, false)?;
+                        let local_hits = agx::search::SearchEngine::search_local(query.trim(), paths, false)?;
+                        hits.extend(local_hits);
+                        agx::search::SearchEngine::print_hits(query.trim(), &hits);
+                    }
+                }
+            }
+            "extract" => {
+                if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to extract from:") {
+                    let pattern_choice = inquire::Select::new(
+                        "Select file to extract:",
+                        vec![
+                            "Implementation Plan (implementation_plan.md)",
+                            "Walkthrough (walkthrough.md)",
+                            "Transcript (transcript.jsonl)",
+                            "Manifest (manifest.json)",
+                            "Extract all files",
+                        ],
+                    )
+                    .with_render_config(render_config)
+                    .prompt();
+
+                    let pattern = match pattern_choice {
+                        Ok("Implementation Plan (implementation_plan.md)") => Some("plan"),
+                        Ok("Walkthrough (walkthrough.md)") => Some("walkthrough"),
+                        Ok("Transcript (transcript.jsonl)") => Some("transcript"),
+                        Ok("Manifest (manifest.json)") => Some("manifest"),
+                        _ => None,
+                    };
+
+                    let extracted = agx::extract::Extractor::extract(&archive_path, pattern, None)?;
+                    println!(
+                        "\n{}",
+                        format!("✔ Successfully extracted {} file(s) into current folder:", extracted.len())
+                            .green()
+                            .bold()
+                    );
+                    for p in extracted {
+                        println!("  - {:?}", p);
+                    }
+                }
             }
             "inspect" => {
                 if let Ok(Some(archive_path)) = agx::ui::select_archive_file("Select archive to inspect:") {

@@ -184,7 +184,64 @@ agx project import my_full_project.agproject --overwrite
 
 ---
 
-### 7. Shell Autocompletions (`completion`)
+### 7. Power-User Capabilities (`diff`, `search`, `extract`, `cat`, `explore`)
+
+#### A. Visual Context Diffing (`diff`)
+Compare implementation plans or brain artifacts between two archives, or against your active local workspace:
+
+```bash
+# Compare plans between two archives
+agx diff feature_v1.agbundle feature_v2.agbundle
+
+# Compare an archived bundle's plan against the active local workspace's plan
+agx diff feature_v1.agbundle --local
+
+# Compare specific file (e.g. walkthrough)
+agx diff v1.agbundle v2.agbundle --file walkthrough
+```
+
+#### B. Zero-Decompression Search & Grep (`search`)
+Query across archived bundles and local sessions without decompressing them to disk:
+
+```bash
+# Search current directory archives for a keyword
+agx search "Stripe webhook"
+
+# Search inside a specific folder
+agx search "HermesEngine" --dir ./team_backups/
+
+# Include all local Antigravity brain sessions in search
+agx search "OAuth2" --local
+```
+
+#### C. Surgical Extraction & Stdout Streaming (`extract` & `cat`)
+Grab specific files without running a full database import:
+
+```bash
+# Extract only the implementation plan
+agx extract session.agbundle --pattern plan -o ./recovered_plan.md
+
+# Extract walkthrough or transcript
+agx extract session.agbundle --pattern walkthrough
+
+# Stream an archived plan directly to stdout (pipe into glow, less, or grep)
+agx cat session.agbundle plan | glow
+```
+
+#### D. Split-Screen Terminal Session Explorer (`explore`)
+Launch a full-screen, keyboard-driven terminal dashboard powered by `ratatui`:
+
+```bash
+agx explore
+```
+* **Vim-style navigation**: `j`/`k` or arrows to browse past conversations.
+* **Live Markdown Preview**: View the selected conversation's `implementation_plan.md` in real-time.
+* **Instant Filter**: Press `/` to search and filter sessions on the fly.
+* **Quick Actions**: Press `x` to instantly extract the selected plan to your local directory.
+
+---
+
+### 8. Shell Autocompletions (`completion`)
 Generate native shell tab-completions for your shell:
 
 ```bash
