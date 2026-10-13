@@ -24,3 +24,7 @@ globset = "0.4"
 inquire = "0.7"
 zstd = "0.13"
 rayon = "1.10"
+indicatif = "0.17"
+comfy-table = "7.1"
+clap_complete = "4.5"
+

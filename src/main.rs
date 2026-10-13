@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use colored::*;
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table};
 use std::path::{Path, PathBuf};
 
 use agx::bundler::Bundler;
@@ -36,6 +39,10 @@ enum Commands {
         /// Maximum number of conversations to display
         #[arg(short, long, default_value_t = 15)]
         limit: usize,
+
+        /// Output results in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Export a single conversation and its project brain into a portable .agbundle archive
@@ -73,6 +80,10 @@ enum Commands {
     Info {
         /// Path to the .agbundle file
         bundle: PathBuf,
+
+        /// Output bundle metadata in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Import an .agbundle into local Antigravity instance
@@ -97,6 +108,13 @@ enum Commands {
     Project {
         #[command(subcommand)]
         action: ProjectCommands,
+    },
+
+    /// Generate shell autocompletion scripts (bash, zsh, fish, powershell, elvish)
+    Completion {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
     },
 }
 
@@ -137,6 +155,10 @@ enum ProjectCommands {
     Info {
         /// Path to the .agproject bundle file
         bundle: PathBuf,
+
+        /// Output project manifest in JSON format
+        #[arg(long)]
+        json: bool,
     },
 
     /// Import an .agproject bundle into local Antigravity instance, restoring all sessions and customizations
@@ -167,8 +189,8 @@ fn main() -> Result<()> {
     let paths = AntigravityPaths::discover(cli.data_dir)?;
 
     match cli.command {
-        Some(Commands::List { workspace, limit }) => {
-            handle_list(&paths, workspace, limit)?;
+        Some(Commands::List { workspace, limit, json }) => {
+            handle_list(&paths, workspace, limit, json)?;
         }
         Some(Commands::Export {
             id,
@@ -190,8 +212,8 @@ fn main() -> Result<()> {
                 ignore_file,
             )?;
         }
-        Some(Commands::Info { bundle }) => {
-            handle_info(&bundle)?;
+        Some(Commands::Info { bundle, json }) => {
+            handle_info(&bundle, json)?;
         }
         Some(Commands::Import {
             bundle,
@@ -222,8 +244,8 @@ fn main() -> Result<()> {
                     ignore_file,
                 )?;
             }
-            ProjectCommands::Info { bundle } => {
-                handle_project_info(&bundle)?;
+            ProjectCommands::Info { bundle, json } => {
+                handle_project_info(&bundle, json)?;
             }
             ProjectCommands::Import {
                 bundle,
@@ -242,6 +264,10 @@ fn main() -> Result<()> {
                 )?;
             }
         },
+        Some(Commands::Completion { shell }) => {
+            let mut cmd = Cli::command();
+            clap_complete::generate(shell, &mut cmd, "agx", &mut std::io::stdout());
+        }
         None => {
             run_interactive_dashboard(&paths)?;
         }
@@ -273,7 +299,7 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
         };
 
         if selection.starts_with("📋 1") {
-            let _ = handle_list(paths, None, 20);
+            let _ = handle_list(paths, None, 20, false);
         } else if selection.starts_with("📦 2") {
             let _ = handle_export(paths, None, None, None, true, false, true, None);
         } else if selection.starts_with("⚡ 3") {
@@ -283,7 +309,7 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
                 _ => continue,
             };
-            let _ = handle_info(Path::new(&path_str));
+            let _ = handle_info(Path::new(&path_str), false);
         } else if selection.starts_with("📥 5") {
             let bundle_path_str = match inquire::Text::new("Enter path to .agbundle to import:").prompt() {
                 Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
@@ -306,7 +332,7 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                 Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
                 _ => continue,
             };
-            let _ = handle_project_info(Path::new(&path_str));
+            let _ = handle_project_info(Path::new(&path_str), false);
         } else if selection.starts_with("📥 8") {
             let bundle_path_str = match inquire::Text::new("Enter path to .agproject to import:").prompt() {
                 Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
@@ -335,7 +361,12 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
     Ok(())
 }
 
-fn handle_list(paths: &AntigravityPaths, workspace_filter: Option<String>, limit: usize) -> Result<()> {
+fn handle_list(
+    paths: &AntigravityPaths,
+    workspace_filter: Option<String>,
+    limit: usize,
+    json: bool,
+) -> Result<()> {
     if !paths.summaries_db().exists() {
         eprintln!(
             "{}",
@@ -363,27 +394,33 @@ fn handle_list(paths: &AntigravityPaths, workspace_filter: Option<String>, limit
         .take(limit)
         .collect();
 
+    if json {
+        println!("{}", serde_json::to_string_pretty(&filtered)?);
+        return Ok(());
+    }
+
     if filtered.is_empty() {
         println!("{}", "No matching conversations found.".yellow());
         return Ok(());
     }
 
-    println!("\n{}", "=== Antigravity Conversations ===".bold().cyan());
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("ID").add_attribute(Attribute::Bold),
+            Cell::new("Title").add_attribute(Attribute::Bold),
+            Cell::new("Modified").add_attribute(Attribute::Bold),
+            Cell::new("Steps").add_attribute(Attribute::Bold),
+            Cell::new("Brain").add_attribute(Attribute::Bold),
+            Cell::new("DB").add_attribute(Attribute::Bold),
+        ]);
+
     for conv in &filtered {
         let brain_exists = paths.conversation_brain(&conv.conversation_id).exists();
         let db_exists = paths.conversation_db(&conv.conversation_id).exists();
-
-        let brain_badge = if brain_exists {
-            "Brain: YES".green()
-        } else {
-            "Brain: NO".dimmed()
-        };
-
-        let db_badge = if db_exists {
-            "DB: YES".green()
-        } else {
-            "DB: NO".dimmed()
-        };
 
         let display_title = if conv.title.trim().is_empty() {
             "Untitled Conversation"
@@ -391,21 +428,39 @@ fn handle_list(paths: &AntigravityPaths, workspace_filter: Option<String>, limit
             &conv.title
         };
 
-        println!(
-            "\n• {} [{}]",
-            display_title.bold().white(),
-            conv.conversation_id.dimmed()
-        );
-        println!("  Last Modified : {}", conv.last_modified_time.cyan());
-        println!("  Workspaces    : {}", conv.workspace_uris);
-        println!(
-            "  Steps         : {} | {} | {}",
-            conv.step_count.to_string().yellow(),
-            brain_badge,
-            db_badge
-        );
+        let short_id = if conv.conversation_id.len() > 8 {
+            &conv.conversation_id[..8]
+        } else {
+            &conv.conversation_id
+        };
+
+        let date = if conv.last_modified_time.len() >= 19 {
+            conv.last_modified_time[..19].replace('T', " ")
+        } else {
+            conv.last_modified_time.clone()
+        };
+
+        table.add_row(vec![
+            Cell::new(short_id).fg(Color::DarkGrey),
+            Cell::new(display_title).add_attribute(Attribute::Bold),
+            Cell::new(date).fg(Color::Cyan),
+            Cell::new(conv.step_count.to_string()).fg(Color::Yellow),
+            if brain_exists {
+                Cell::new("✓").fg(Color::Green)
+            } else {
+                Cell::new("-").fg(Color::DarkGrey)
+            },
+            if db_exists {
+                Cell::new("✓").fg(Color::Green)
+            } else {
+                Cell::new("-").fg(Color::DarkGrey)
+            },
+        ]);
     }
-    println!("\nTotal displayed: {}\n", filtered.len());
+
+    println!("\n{}", "=== Antigravity Conversations ===".bold().cyan());
+    println!("{table}");
+    println!("Total displayed: {}\n", filtered.len());
 
     Ok(())
 }
@@ -565,8 +620,13 @@ fn handle_export(
     Ok(())
 }
 
-fn handle_info(bundle_path: &Path) -> Result<()> {
+fn handle_info(bundle_path: &Path, json: bool) -> Result<()> {
     let manifest = Bundler::inspect_bundle(bundle_path)?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&manifest)?);
+        return Ok(());
+    }
 
     println!("\n{}", "=== Antigravity Bundle Information ===".bold().cyan());
     println!("  Bundle Version : {}", manifest.version.yellow());
@@ -776,8 +836,13 @@ fn handle_project_export(
     Ok(())
 }
 
-fn handle_project_info(bundle_path: &Path) -> Result<()> {
+fn handle_project_info(bundle_path: &Path, json: bool) -> Result<()> {
     let manifest = ProjectBundler::inspect_project_bundle(bundle_path)?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&manifest)?);
+        return Ok(());
+    }
 
     println!("\n{}", "=== Antigravity Project Bundle Information ===".bold().cyan());
     println!("  Project Name   : {}", manifest.project_name.bold().white());

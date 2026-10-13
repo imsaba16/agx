@@ -51,6 +51,21 @@ impl ProjectBundler {
             );
         }
 
+        let spinner = if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+            let s = indicatif::ProgressBar::new_spinner();
+            s.set_style(
+                indicatif::ProgressStyle::default_spinner()
+                    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+                    .template("{spinner:.cyan} {msg}")
+                    .unwrap_or_else(|_| indicatif::ProgressStyle::default_spinner()),
+            );
+            s.set_message("Parallel-processing sessions, brain artifacts, and project customizations...");
+            s.enable_steady_tick(std::time::Duration::from_millis(80));
+            Some(s)
+        } else {
+            None
+        };
+
         let remapper = PathRemapper::for_export(ws_root);
         let sanitizer = if options.sanitize {
             Some(SecretSanitizer::new())
@@ -235,6 +250,10 @@ impl ProjectBundler {
         tar.finish()?;
         let encoder = tar.into_inner()?;
         encoder.finish()?;
+
+        if let Some(s) = spinner {
+            s.finish_and_clear();
+        }
 
         Ok(manifest)
     }

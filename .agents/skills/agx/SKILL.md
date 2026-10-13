@@ -70,6 +70,11 @@ When the user asks to see previous sessions or find a session to export:
 ~/.cargo/bin/agx list
 ```
 
+To output machine-readable JSON:
+```bash
+~/.cargo/bin/agx list --json
+```
+
 To filter by a project name or workspace path:
 ```bash
 ~/.cargo/bin/agx list --workspace "<keyword>" --limit 10
@@ -82,6 +87,10 @@ When the user wants to know what is inside an `.agbundle` without importing it:
 
 ```bash
 ~/.cargo/bin/agx info <path-to-bundle.agbundle>
+```
+Or for JSON:
+```bash
+~/.cargo/bin/agx info <path-to-bundle.agbundle> --json
 ```
 
 Report:

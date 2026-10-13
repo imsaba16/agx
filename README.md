@@ -45,14 +45,17 @@ cargo install --path .
 ## Usage
 
 ### 1. List Conversations
-Inspect all Antigravity conversations recorded on your system:
+Inspect all Antigravity conversations recorded on your system in a clean, formatted Unicode table:
 
 ```bash
-# List recent conversations
+# List recent conversations in a formatted table
 agx list
 
 # Filter conversations matching a workspace or project name
 agx list --workspace "my-project" --limit 10
+
+# Output machine-readable JSON for scripting, CI/CD, or IDE plugins
+agx list --json --limit 5
 ```
 
 ### 2. Export a Session & Brain to `.agbundle`
@@ -94,7 +97,11 @@ scratch/tmp_*
 View metadata, author host, creation date, step count, and contents of any `.agbundle` without importing it:
 
 ```bash
+# Human-readable summary
 agx info my_session.agbundle
+
+# Machine-readable JSON output
+agx info my_session.agbundle --json
 ```
 
 ### 4. Import a Bundle on Another Machine
@@ -151,6 +158,25 @@ agx project import my_full_project.agproject --target-workspace ~/dev/my-repo
 
 # Overwrite existing sessions and customizations
 agx project import my_full_project.agproject --overwrite
+```
+
+---
+
+### 6. Shell Autocompletions (`completion`)
+Generate native shell tab-completions for your shell:
+
+```bash
+# Zsh
+agx completion zsh > ~/.zsh/completion/_agx
+
+# Bash
+agx completion bash > /etc/bash_completion.d/agx
+
+# Fish
+agx completion fish > ~/.config/fish/completions/agx.fish
+
+# PowerShell
+agx completion powershell >> $PROFILE
 ```
 
 ---
