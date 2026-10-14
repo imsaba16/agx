@@ -103,12 +103,35 @@ impl Database {
         for t in &terms {
             all_terms.push(t.clone());
             all_terms.push(t.replace('\\', "/"));
+            all_terms.push(t.to_lowercase());
+            all_terms.push(t.replace('\\', "/").to_lowercase());
+            all_terms.push(t.replace(':', "%3a").to_lowercase());
+            all_terms.push(t.replace(':', "%3A"));
         }
+
+        let dir_name = workspace_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_lowercase());
 
         let all = self.list_conversations()?;
         let filtered = all
             .into_iter()
-            .filter(|c| all_terms.iter().any(|term| c.workspace_uris.contains(term)))
+            .filter(|c| {
+                let uris_lower = c.workspace_uris.to_lowercase();
+                if all_terms.iter().any(|term| {
+                    c.workspace_uris.contains(term) || uris_lower.contains(&term.to_lowercase())
+                }) {
+                    return true;
+                }
+
+                if let Some(ref d_name) = dir_name {
+                    if !c.project_id.trim().is_empty() && c.project_id.to_lowercase() == *d_name {
+                        return true;
+                    }
+                }
+
+                false
+            })
             .collect();
 
         Ok(filtered)
