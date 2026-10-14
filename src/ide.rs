@@ -200,7 +200,7 @@ impl IdeStorage {
         #[cfg(target_os = "windows")]
         {
             if let Ok(output) = std::process::Command::new("tasklist")
-                .args(&["/FI", "IMAGENAME eq Antigravity.exe"])
+                .args(["/FI", "IMAGENAME eq Antigravity.exe"])
                 .output()
             {
                 let text = String::from_utf8_lossy(&output.stdout);
@@ -244,7 +244,7 @@ impl IdeStorage {
         #[cfg(target_os = "windows")]
         {
             let mut cmd = std::process::Command::new("cmd");
-            cmd.args(&["/c", "start", "", "Antigravity.exe"]);
+            cmd.args(["/c", "start", "", "Antigravity.exe"]);
             if let Some(ws) = target_workspace {
                 cmd.arg(ws.as_os_str());
             }
@@ -325,7 +325,7 @@ impl IdeStorage {
         #[cfg(target_os = "windows")]
         {
             let _ = std::process::Command::new("taskkill")
-                .args(&["/IM", "Antigravity.exe"])
+                .args(["/IM", "Antigravity.exe"])
                 .output();
 
             let start = std::time::Instant::now();
