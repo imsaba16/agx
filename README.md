@@ -6,7 +6,7 @@
 
 **Enterprise Context Exchange, Session Portability, and Security Engine for Google Antigravity**
 
-[![Release](https://img.shields.io/badge/release-v1.0.0--rc.1-0052CC.svg?style=flat-square)](https://github.com/imsaba16/agx/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.0--rc.2-0052CC.svg?style=flat-square)](https://github.com/imsaba16/agx/releases)
 [![Rust](https://img.shields.io/badge/rust-1.74%2B-DEA584.svg?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-28A745.svg?style=flat-square)](LICENSE)
 [![Security Audit](https://img.shields.io/badge/security-audited-success.svg?style=flat-square)](SECURITY.md)
@@ -61,6 +61,8 @@ By default, Google Antigravity stores conversation trajectories, planner thinkin
 | Session & Artifact Diffing | No | External tools | Built-in (`agx diff`) |
 | Interactive TUI Session Explorer | No | No | Built-in (`agx explore`) |
 | Skills, Rules & MCP Packaging | Manual | Manual | Unified (`agx project export`) |
+| Protobuf Summaries Sync (`agyhub`) | No | No | Automatic Protobuf Wire Encoder |
+| Automatic IDE & Daemon Refresh | No | No | Built-in (`agx restart` / `--restart`) |
 | Cryptographic Integrity Verification | No | No | SHA-256 Hash Auditing (`agx verify`) |
 | Anti-Zip Slip & Decompression Bomb Guard | No | Varies | Enforced by Default |
 
@@ -94,18 +96,24 @@ cargo install --path .
 Verify your installation:
 ```bash
 agx --version
-# agx 1.0.0-rc.1
+# agx 1.0.0-rc.2
 ```
 
 ---
 
 ### Basic Usage Workflows
 
-#### 1. Interactive Conversation Export
-Export an Antigravity conversation using an interactive fuzzy picker:
+#### 1. Interactive Priority Dashboard
+Launch the unified interactive menu designed with a prioritized, zero-clutter hierarchy:
 ```bash
-agx export
+agx
 ```
+Presents 5 core actions without terminal overflow:
+- **`Import Archive...`**: One-click restoration of `.agproject` or `.agbundle` archives.
+- **`Export...`**: Consolidated menu to backup entire projects, active sessions, or browse past history.
+- **`Interactive TUI Explorer`**: Full-screen split-pane session explorer with live markdown preview.
+- **`Restart Antigravity`**: Gracefully refreshes the Antigravity language server daemon and loads all changes.
+- **`More Tools & Utilities...`**: Secondary utilities (Diff, Search, Extract, Inspect, Verify, Sessions Table).
 
 #### 2. Compact Session Export
 Generate a lightweight archive excluding redundant planner steps and large binary payloads:
@@ -122,11 +130,22 @@ agx info session_backup.agbundle
 #### 4. Import a Session on Another Workstation
 Restore a session archive directly into your target Antigravity brain directory:
 ```bash
-# Import with a new UUID to prevent collisions
-agx import session_backup.agbundle --as-new-id
+# Preview what will be imported without touching disk
+agx import session_backup.agbundle --dry-run
 
-# Import and remap paths to a new workspace root
-agx import session_backup.agbundle --workspace /path/to/local/project
+# Import and bind to local workspace (safely forks ID by default)
+agx import session_backup.agbundle --target-workspace /path/to/local/project
+
+# Import and automatically restart Antigravity to reflect changes immediately
+agx import session_backup.agbundle --target-workspace /path/to/local/project --restart
+```
+
+#### 5. Gracefully Restart Antigravity (`agx restart`)
+Restart the Antigravity IDE and its background language server daemon to immediately reflect newly imported projects and conversations:
+```bash
+agx restart
+# Or reopen a specific workspace:
+agx restart --workspace /path/to/local/project
 ```
 
 ---
@@ -197,8 +216,11 @@ agx project info Workspace.agproject
 # Cryptographically audit archive integrity
 agx verify Workspace.agproject
 
-# Import into a target directory
-agx project import Workspace.agproject --workspace ~/dev/my-project
+# Preview import with dry-run
+agx project import Workspace.agproject --target-workspace ~/dev/my-project --dry-run
+
+# Import into target directory and restart Antigravity immediately
+agx project import Workspace.agproject --target-workspace ~/dev/my-project --restart
 ```
 
 ---
@@ -276,7 +298,7 @@ agx completion fish > ~/.config/fish/completions/agx.fish
 - *"Export this conversation as a compact archive for my teammate"*
 - *"Inspect and verify the bundle at ./backup.agbundle"*
 
-Skill manifest: [`.agents/skills/agx/SKILL.md`](.agents/skills/agx/SKILL.md).
+Skill manifest: [`docs/SKILL.md`](docs/SKILL.md) (workspace: [`.agents/skills/agx/SKILL.md`](.agents/skills/agx/SKILL.md)).
 
 ---
 
@@ -300,6 +322,7 @@ Yes. The `agx search`, `agx cat`, and `agx extract` commands read directly from 
 
 - [CLI Reference Guide](docs/cli-reference.md): Detailed parameter, flag, and option breakdown for all subcommands.
 - [Architecture & Format Specification](docs/architecture.md): Internal design, manifest schemas, and data structures.
+- [Native Agent Skill Specification](docs/SKILL.md): Antigravity agent runbook, slash command triggers, and conversational workflows.
 - [Packaging & Distribution Guide](docs/packaging-and-distribution.md): Setup instructions for Homebrew, Scoop, WinGet, and multi-platform binary releases.
 - [Security Policy](SECURITY.md): Vulnerability reporting procedures and mitigation strategies.
 - [Contributing Guide](CONTRIBUTING.md): Development environment setup, linting, and testing workflows.

@@ -191,11 +191,68 @@ impl Importer {
                 };
             }
 
+            let raw_bytes = if let Some(mut raw) = updated_summary.raw_summary.clone() {
+                if !manifest.conversation.project_id.trim().is_empty()
+                    && manifest.conversation.project_id.len() == updated_summary.project_id.len()
+                    && manifest.conversation.project_id != updated_summary.project_id
+                {
+                    raw = replace_bytes(
+                        &raw,
+                        manifest.conversation.project_id.as_bytes(),
+                        updated_summary.project_id.as_bytes(),
+                    );
+                }
+                if manifest.conversation.conversation_id != final_id
+                    && manifest.conversation.conversation_id.len() == final_id.len()
+                {
+                    raw = replace_bytes(
+                        &raw,
+                        manifest.conversation.conversation_id.as_bytes(),
+                        final_id.as_bytes(),
+                    );
+                }
+                updated_summary.raw_summary = Some(raw.clone());
+                raw
+            } else {
+                let ws_uri_str = updated_summary.workspace_uris.as_str();
+                let syn = crate::summaries_pb::SummariesProto::synthesize_summary(
+                    &updated_summary.title,
+                    &final_id,
+                    &updated_summary.project_id,
+                    ws_uri_str,
+                );
+                updated_summary.raw_summary = Some(syn.clone());
+                syn
+            };
+
             db.upsert_conversation_with_fts(&updated_summary, &project_name, &ws_name)?;
+
+            // Sync to agyhub_summaries_proto.pb so Antigravity Language Server loads the conversation into Redux
+            let _ = crate::summaries_pb::SummariesProto::sync_all_pb_targets(
+                paths,
+                &[(final_id.clone(), raw_bytes)],
+            );
         }
 
         Ok((final_id, manifest))
     }
+}
+
+fn replace_bytes(data: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
+    if from.is_empty() || from.len() != to.len() {
+        return data.to_vec();
+    }
+    let mut result = data.to_vec();
+    let mut i = 0;
+    while i + from.len() <= result.len() {
+        if &result[i..i + from.len()] == from {
+            result[i..i + from.len()].copy_from_slice(to);
+            i += from.len();
+        } else {
+            i += 1;
+        }
+    }
+    result
 }
 
 fn is_text_path(path: &Path) -> bool {
