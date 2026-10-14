@@ -51,7 +51,8 @@ impl IdeStorage {
             if !list.contains(&project_id.to_string()) {
                 list.push(project_id.to_string());
                 if order_val.is_string() {
-                    storage["projectsOrder"] = serde_json::Value::String(serde_json::to_string(&list)?);
+                    storage["projectsOrder"] =
+                        serde_json::Value::String(serde_json::to_string(&list)?);
                 } else {
                     storage["projectsOrder"] = serde_json::json!(list);
                 }
@@ -172,7 +173,9 @@ impl IdeStorage {
                 .arg("application \"Antigravity\" is running")
                 .output()
             {
-                let text = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+                let text = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .to_lowercase();
                 if text == "true" {
                     return true;
                 }

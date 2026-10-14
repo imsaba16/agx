@@ -240,10 +240,7 @@ impl Database {
                     )
                 })
                 .or_else(|_| {
-                    chrono::DateTime::parse_from_str(
-                        &conv.last_modified_time,
-                        "%Y-%m-%d %H:%M:%S",
-                    )
+                    chrono::DateTime::parse_from_str(&conv.last_modified_time, "%Y-%m-%d %H:%M:%S")
                 })
                 .map(|dt| dt.timestamp_nanos_opt().unwrap_or(now_ns))
                 .unwrap_or(now_ns);

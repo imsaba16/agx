@@ -505,14 +505,15 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
     ];
 
     loop {
-        let selection = match inquire::Select::new("Select an action:", primary_actions.iter().collect())
-            .with_render_config(render_config)
-            .with_page_size(8)
-            .prompt()
-        {
-            Ok(s) => s.id,
-            Err(_) => break,
-        };
+        let selection =
+            match inquire::Select::new("Select an action:", primary_actions.iter().collect())
+                .with_render_config(render_config)
+                .with_page_size(8)
+                .prompt()
+            {
+                Ok(s) => s.id,
+                Err(_) => break,
+            };
 
         match selection {
             "import" => {
@@ -546,15 +547,8 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                         )
                         .is_ok()
                     } else {
-                        handle_import(
-                            paths,
-                            archive_path,
-                            target_ws.clone(),
-                            false,
-                            false,
-                            false,
-                        )
-                        .is_ok()
+                        handle_import(paths, archive_path, target_ws.clone(), false, false, false)
+                            .is_ok()
                     };
 
                     if imported_ok && IdeStorage::is_antigravity_running() {
@@ -575,7 +569,10 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                                         .bold()
                                 ),
                                 Err(e) => {
-                                    eprintln!("{}", format!("⚠ Could not restart Antigravity: {}", e).yellow())
+                                    eprintln!(
+                                        "{}",
+                                        format!("⚠ Could not restart Antigravity: {}", e).yellow()
+                                    )
                                 }
                             }
                         }
@@ -606,9 +603,12 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                     },
                 ];
 
-                let export_sel = match inquire::Select::new("Select export type:", export_actions.iter().collect())
-                    .with_render_config(render_config)
-                    .prompt()
+                let export_sel = match inquire::Select::new(
+                    "Select export type:",
+                    export_actions.iter().collect(),
+                )
+                .with_render_config(render_config)
+                .prompt()
                 {
                     Ok(s) => s.id,
                     Err(_) => continue,
@@ -702,22 +702,27 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                     },
                 ];
 
-                let tool_sel = match inquire::Select::new("Select utility:", tool_actions.iter().collect())
-                    .with_render_config(render_config)
-                    .with_page_size(10)
-                    .prompt()
-                {
-                    Ok(s) => s.id,
-                    Err(_) => continue,
-                };
+                let tool_sel =
+                    match inquire::Select::new("Select utility:", tool_actions.iter().collect())
+                        .with_render_config(render_config)
+                        .with_page_size(10)
+                        .prompt()
+                    {
+                        Ok(s) => s.id,
+                        Err(_) => continue,
+                    };
 
                 match tool_sel {
                     "diff" => {
                         if let Ok(Some(archive_path)) =
                             agx::ui::select_archive_file("Select archive to compare:")
                         {
-                            let _ =
-                                agx::diff::DiffEngine::diff_with_local(&archive_path, &cwd, paths, None);
+                            let _ = agx::diff::DiffEngine::diff_with_local(
+                                &archive_path,
+                                &cwd,
+                                paths,
+                                None,
+                            );
                         }
                     }
                     "search" => {
@@ -726,10 +731,16 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                             .prompt();
                         if let Ok(query) = query_ans {
                             if !query.trim().is_empty() {
-                                let mut hits =
-                                    agx::search::SearchEngine::search_archives(query.trim(), &cwd, false)?;
-                                let local_hits =
-                                    agx::search::SearchEngine::search_local(query.trim(), paths, false)?;
+                                let mut hits = agx::search::SearchEngine::search_archives(
+                                    query.trim(),
+                                    &cwd,
+                                    false,
+                                )?;
+                                let local_hits = agx::search::SearchEngine::search_local(
+                                    query.trim(),
+                                    paths,
+                                    false,
+                                )?;
                                 hits.extend(local_hits);
                                 agx::search::SearchEngine::print_hits(query.trim(), &hits);
                             }
@@ -760,7 +771,8 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                                 _ => None,
                             };
 
-                            let extracted = agx::extract::Extractor::extract(&archive_path, pattern, None)?;
+                            let extracted =
+                                agx::extract::Extractor::extract(&archive_path, pattern, None)?;
                             println!(
                                 "\n{}",
                                 format!(
@@ -1234,7 +1246,10 @@ fn handle_import(
                             .bold()
                     ),
                     Err(e) => {
-                        eprintln!("{}", format!("⚠ Failed to restart Antigravity: {}", e).yellow())
+                        eprintln!(
+                            "{}",
+                            format!("⚠ Failed to restart Antigravity: {}", e).yellow()
+                        )
                     }
                 }
             } else {
@@ -1740,7 +1755,10 @@ fn handle_project_import(
                             .bold()
                     ),
                     Err(e) => {
-                        eprintln!("{}", format!("⚠ Failed to restart Antigravity: {}", e).yellow())
+                        eprintln!(
+                            "{}",
+                            format!("⚠ Failed to restart Antigravity: {}", e).yellow()
+                        )
                     }
                 }
             } else {
@@ -1777,7 +1795,10 @@ fn handle_restart(workspace: Option<PathBuf>) -> Result<()> {
                     .green()
                     .bold()
             ),
-            Err(e) => eprintln!("{}", format!("⚠ Failed to restart Antigravity: {}", e).yellow()),
+            Err(e) => eprintln!(
+                "{}",
+                format!("⚠ Failed to restart Antigravity: {}", e).yellow()
+            ),
         }
     } else {
         println!(
@@ -1785,11 +1806,11 @@ fn handle_restart(workspace: Option<PathBuf>) -> Result<()> {
             "● Antigravity is not currently running. Launching...".cyan()
         );
         match IdeStorage::launch_antigravity(ws.as_deref()) {
-            Ok(_) => println!(
+            Ok(_) => println!("{}", "✔ Antigravity launched successfully!".green().bold()),
+            Err(e) => eprintln!(
                 "{}",
-                "✔ Antigravity launched successfully!".green().bold()
+                format!("⚠ Failed to launch Antigravity: {}", e).yellow()
             ),
-            Err(e) => eprintln!("{}", format!("⚠ Failed to launch Antigravity: {}", e).yellow()),
         }
     }
     println!();
