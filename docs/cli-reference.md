@@ -14,7 +14,7 @@ These options are available on all `agx` invocations:
 | `--non-interactive` | `-y` | Disable interactive prompts; fail if input required | `false` |
 | `--verbose` | `-v` | Enable detailed logging output | `false` |
 | `--help` | `-h` | Print help information for command or subcommand | - |
-| `--version` | `-V` | Print version information (`agx 1.0.0-rc.1`) | - |
+| `--version` | `-V` | Print version information (`agx 1.0.0-rc.2`) | - |
 
 ### Environment Variables
 

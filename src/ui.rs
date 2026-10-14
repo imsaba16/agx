@@ -128,7 +128,7 @@ pub fn render_context_header(
     println!(
         "{} {}",
         "agx".bold().cyan(),
-        "─ Antigravity eXtension (v1.0.0-rc.1)".dimmed()
+        format!("─ Antigravity eXtension (v{})", env!("CARGO_PKG_VERSION")).dimmed()
     );
     println!(
         "  {:<12} : {} ({})",

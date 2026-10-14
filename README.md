@@ -6,7 +6,7 @@
 
 **Enterprise Context Exchange, Session Portability, and Security Engine for Google Antigravity**
 
-[![Release](https://img.shields.io/badge/release-v1.0.0--rc.1-0052CC.svg?style=flat-square)](https://github.com/imsaba16/agx/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.0--rc.2-0052CC.svg?style=flat-square)](https://github.com/imsaba16/agx/releases)
 [![Rust](https://img.shields.io/badge/rust-1.74%2B-DEA584.svg?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-28A745.svg?style=flat-square)](LICENSE)
 [![Security Audit](https://img.shields.io/badge/security-audited-success.svg?style=flat-square)](SECURITY.md)
@@ -96,7 +96,7 @@ cargo install --path .
 Verify your installation:
 ```bash
 agx --version
-# agx 1.0.0-rc.1
+# agx 1.0.0-rc.2
 ```
 
 ---

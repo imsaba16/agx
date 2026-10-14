@@ -4,7 +4,7 @@
 
 ## Context & Environment
 
-- **agx Version**: (e.g. `1.0.0-rc.1`)
+- **agx Version**: (e.g. `1.0.0-rc.2`)
 - **Operating System**: (macOS / Linux / Windows)
 - **Workflow Scenario**: (e.g., Exporting whole project, diffing transcripts, importing into custom brain path)
 
