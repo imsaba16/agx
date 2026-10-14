@@ -116,22 +116,59 @@ impl Importer {
                 .or_else(|_| fs::copy(&staging_conv_db, &dest_db_path).map(|_| ()))?;
         }
 
-        // 5. Update database
+        // 5. Update database and register project in IDE
         if paths.summaries_db().exists() {
             let mut updated_summary = manifest.conversation.clone();
             updated_summary.conversation_id = final_id.clone();
             if already_exists && !options.overwrite {
                 updated_summary.title = format!("{} (Imported)", updated_summary.title);
             }
-            if let Some(ref target_ws) = options.target_workspace {
+
+            let (project_name, ws_name) = if let Some(ref target_ws) = options.target_workspace {
                 updated_summary.workspace_uris = PathRemapper::remap_workspace_uris_import(
                     &updated_summary.workspace_uris,
                     target_ws,
                 );
-            }
+                let name = target_ws
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "project".to_string());
+                (name.clone(), name)
+            } else {
+                let name = "Imported Session".to_string();
+                (name.clone(), name)
+            };
 
             let db = Database::new(&paths.summaries_db());
-            db.upsert_conversation(&updated_summary)?;
+
+            // If target workspace is known, attach to its existing project_id if present
+            if let Some(ref target_ws) = options.target_workspace {
+                if let Ok(Some(existing_pid)) = db.find_project_id_for_workspace(target_ws) {
+                    if !existing_pid.trim().is_empty() {
+                        updated_summary.project_id = existing_pid;
+                    }
+                }
+            }
+
+            // Register project in Antigravity app_storage.json if project_id exists
+            if !updated_summary.project_id.trim().is_empty() {
+                if let Some(storage_path) = paths.ide_app_storage() {
+                    let _ = crate::ide::IdeStorage::register_project(
+                        &storage_path,
+                        &updated_summary.project_id,
+                    );
+                }
+            }
+
+            if updated_summary.title.trim().is_empty() {
+                updated_summary.title = if !updated_summary.preview.trim().is_empty() {
+                    updated_summary.preview.clone()
+                } else {
+                    format!("{} Session", project_name)
+                };
+            }
+
+            db.upsert_conversation_with_fts(&updated_summary, &project_name, &ws_name)?;
         }
 
         Ok((final_id, manifest))

@@ -111,9 +111,24 @@ impl ProjectBundler {
             customizations.has_hooks = true;
         }
 
+        // Ensure unified project_id and valid titles across all exported sessions
+        let primary_project_id = selected_convs
+            .iter()
+            .find(|c| !c.project_id.trim().is_empty())
+            .map(|c| c.project_id.clone())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
         // Remap conversations metadata
         let mut remapped_convs = selected_convs.clone();
         for c in &mut remapped_convs {
+            c.project_id = primary_project_id.clone();
+            if c.title.trim().is_empty() {
+                c.title = if !c.preview.trim().is_empty() {
+                    c.preview.clone()
+                } else {
+                    format!("{} Session", project_name)
+                };
+            }
             c.workspace_uris = remapper.remap_workspace_uris_export(&c.workspace_uris);
         }
 
@@ -233,6 +248,7 @@ impl ProjectBundler {
             source_os: std::env::consts::OS.to_string(),
             source_username: whoami(),
             project_name,
+            project_id: Some(primary_project_id),
             original_workspace_path: cleaned_root.to_string_lossy().to_string(),
             original_workspace_uri: crate::remapper::to_file_uri(&cleaned_root),
             conversations: remapped_convs,

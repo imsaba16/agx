@@ -66,4 +66,36 @@ impl AntigravityPaths {
     pub fn check_exists(&self) -> bool {
         self.base_dir.exists() && self.summaries_db().exists()
     }
+
+    pub fn ide_app_storage(&self) -> Option<PathBuf> {
+        let direct_candidates = vec![
+            dirs::data_dir().map(|d| d.join("Antigravity").join("app_storage.json")),
+            dirs::config_dir().map(|d| d.join("Antigravity").join("app_storage.json")),
+            dirs::home_dir().map(|h| h.join(".config").join("Antigravity").join("app_storage.json")),
+            dirs::home_dir().map(|h| {
+                h.join("Library")
+                    .join("Application Support")
+                    .join("Antigravity")
+                    .join("app_storage.json")
+            }),
+        ];
+
+        for candidate in direct_candidates.into_iter().flatten() {
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        return dirs::home_dir().map(|h| {
+            h.join("Library/Application Support/Antigravity/app_storage.json")
+        });
+        #[cfg(target_os = "windows")]
+        return dirs::config_dir().map(|d| d.join("Antigravity").join("app_storage.json"));
+        #[cfg(target_os = "linux")]
+        return dirs::config_dir().map(|d| d.join("Antigravity").join("app_storage.json"));
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        None
+    }
 }

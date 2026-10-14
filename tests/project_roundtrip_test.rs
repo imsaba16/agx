@@ -38,6 +38,27 @@ fn setup_mock_db(db_path: &PathBuf) {
         [],
     )
     .unwrap();
+
+    let _ = conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
+            conversation_id UNINDEXED,
+            chunk_index UNINDEXED,
+            chunk_first_step UNINDEXED,
+            chunk_last_step UNINDEXED,
+            last_modified_time UNINDEXED,
+            step_count UNINDEXED,
+            last_step_created_at UNINDEXED,
+            archived UNINDEXED,
+            user_step_byte_offsets UNINDEXED,
+            agent_step_byte_offsets UNINDEXED,
+            title,
+            workspace,
+            project,
+            user_body,
+            agent_body
+        )",
+        [],
+    );
 }
 
 #[test]
@@ -269,6 +290,30 @@ fn test_project_export_import_roundtrip() {
         .join("rules.md")
         .exists());
     assert!(target_ws.join(".agents").join("mcp_config.json").exists());
+
+    // Verify conversations_fts contains rows with project and workspace
+    let conn = Connection::open(&target_paths.summaries_db()).unwrap();
+    let mut stmt = conn
+        .prepare("SELECT conversation_id, project, workspace, title FROM conversations_fts WHERE chunk_index = -1")
+        .unwrap();
+    let fts_rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(fts_rows.len(), 2);
+    for row in fts_rows {
+        assert!(!row.1.is_empty(), "Project must not be empty in FTS");
+        assert!(!row.2.is_empty(), "Workspace must not be empty in FTS");
+        assert!(!row.3.is_empty(), "Title must not be empty in FTS");
+    }
 
     // 9. Verify safe-forking when destination already has colliding conversation IDs
     let (fork_count, _) =

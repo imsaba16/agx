@@ -200,4 +200,91 @@ impl Database {
 
         Ok(())
     }
+
+    pub fn find_project_id_for_workspace(&self, workspace_path: &Path) -> Result<Option<String>> {
+        let convs = self.find_conversations_for_workspace(workspace_path)?;
+        for c in convs {
+            if !c.project_id.trim().is_empty() {
+                return Ok(Some(c.project_id));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn upsert_conversation_with_fts(
+        &self,
+        conv: &ConversationSummary,
+        project_name: &str,
+        workspace_name: &str,
+    ) -> Result<()> {
+        self.upsert_conversation(conv)?;
+
+        let conn = self.open_read_write()?;
+
+        let has_fts: bool = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='conversations_fts'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|cnt| cnt > 0)
+            .unwrap_or(false);
+
+        if has_fts {
+            let now_ns = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+            let mod_time_ns = chrono::DateTime::parse_from_rfc3339(&conv.last_modified_time)
+                .or_else(|_| {
+                    chrono::DateTime::parse_from_str(
+                        &conv.last_modified_time,
+                        "%Y-%m-%d %H:%M:%S%.f%:z",
+                    )
+                })
+                .or_else(|_| {
+                    chrono::DateTime::parse_from_str(
+                        &conv.last_modified_time,
+                        "%Y-%m-%d %H:%M:%S",
+                    )
+                })
+                .map(|dt| dt.timestamp_nanos_opt().unwrap_or(now_ns))
+                .unwrap_or(now_ns);
+
+            let display_title = if !conv.title.trim().is_empty() {
+                conv.title.trim()
+            } else if !conv.preview.trim().is_empty() {
+                conv.preview.trim()
+            } else {
+                project_name
+            };
+
+            let _ = conn.execute(
+                "DELETE FROM conversations_fts WHERE conversation_id = ?1 AND chunk_index = -1",
+                params![conv.conversation_id],
+            );
+
+            let _ = conn.execute(
+                "INSERT INTO conversations_fts (
+                    conversation_id, chunk_index, chunk_first_step, chunk_last_step,
+                    last_modified_time, step_count, last_step_created_at, archived,
+                    user_step_byte_offsets, agent_step_byte_offsets,
+                    title, workspace, project, user_body, agent_body
+                ) VALUES (
+                    ?1, -1, 0, 0,
+                    ?2, ?3, ?4, 0,
+                    '', '',
+                    ?5, ?6, ?7, '', ''
+                )",
+                params![
+                    conv.conversation_id,
+                    mod_time_ns,
+                    conv.step_count,
+                    mod_time_ns,
+                    display_title,
+                    workspace_name,
+                    project_name,
+                ],
+            );
+        }
+
+        Ok(())
+    }
 }

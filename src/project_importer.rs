@@ -193,9 +193,61 @@ impl ProjectImporter {
             }
         }
 
-        // 4. Upsert conversations in summaries database
+        // 4. Upsert conversations in summaries database and register project in IDE
+        let ws_name = target_ws
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| manifest.project_name.clone());
+        let project_name = if !manifest.project_name.trim().is_empty() {
+            manifest.project_name.clone()
+        } else {
+            ws_name.clone()
+        };
+
         if paths.summaries_db().exists() {
             let db = Database::new(&paths.summaries_db());
+
+            // Check if this workspace already has a project ID registered in Antigravity
+            let target_project_id = if let Ok(Some(existing_pid)) =
+                db.find_project_id_for_workspace(target_ws)
+            {
+                if !existing_pid.trim().is_empty() {
+                    existing_pid
+                } else {
+                    manifest
+                        .project_id
+                        .as_deref()
+                        .filter(|s| !s.trim().is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| {
+                            manifest
+                                .conversations
+                                .iter()
+                                .find(|c| !c.project_id.trim().is_empty())
+                                .map(|c| c.project_id.clone())
+                                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+                        })
+                }
+            } else {
+                manifest
+                    .project_id
+                    .clone()
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| {
+                        manifest
+                            .conversations
+                            .iter()
+                            .find(|c| !c.project_id.trim().is_empty())
+                            .map(|c| c.project_id.clone())
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+                    })
+            };
+
+            // Register project in Antigravity's IDE app_storage.json
+            if let Some(storage_path) = paths.ide_app_storage() {
+                let _ = crate::ide::IdeStorage::register_project(&storage_path, &target_project_id);
+            }
+
             for conv in &manifest.conversations {
                 let orig_id = &conv.conversation_id;
                 let final_id = id_map
@@ -205,13 +257,23 @@ impl ProjectImporter {
 
                 let mut updated = conv.clone();
                 updated.conversation_id = final_id.clone();
+                updated.project_id = target_project_id.clone();
+
+                if updated.title.trim().is_empty() {
+                    updated.title = if !updated.preview.trim().is_empty() {
+                        updated.preview.clone()
+                    } else {
+                        format!("{} Session", project_name)
+                    };
+                }
+
                 if final_id != *orig_id {
                     updated.title = format!("{} (Imported)", updated.title);
                 }
                 updated.workspace_uris =
                     PathRemapper::remap_workspace_uris_import(&updated.workspace_uris, target_ws);
 
-                db.upsert_conversation(&updated)?;
+                db.upsert_conversation_with_fts(&updated, &project_name, &ws_name)?;
             }
         }
 

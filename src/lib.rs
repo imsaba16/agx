@@ -5,6 +5,7 @@ pub mod diff;
 pub mod explorer;
 pub mod extract;
 pub mod filter;
+pub mod ide;
 pub mod importer;
 pub mod models;
 pub mod project_bundler;

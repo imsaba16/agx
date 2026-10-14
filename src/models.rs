@@ -79,6 +79,8 @@ pub struct ProjectManifest {
     pub source_os: String,
     pub source_username: String,
     pub project_name: String,
+    #[serde(default)]
+    pub project_id: Option<String>,
     pub original_workspace_path: String,
     pub original_workspace_uri: String,
     pub conversations: Vec<ConversationSummary>,
