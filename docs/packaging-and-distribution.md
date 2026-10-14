@@ -129,13 +129,17 @@ scoop install agx
 ```json
 {
   "version": "1.0.0-rc.2",
-  "description": "Context exchange, session diffing, search, and backup engine for Google Antigravity",
+  "description": "Enterprise context exchange, session diffing, search, and backup engine for Google Antigravity",
   "homepage": "https://github.com/imsaba16/agx",
   "license": "Apache-2.0",
   "architecture": {
     "64bit": {
       "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.2/agx-windows-x86_64.zip",
-      "hash": "<SHA256_OF_WINDOWS_ZIP>"
+      "hash": "<SHA256_OF_WINDOWS_X86_64_ZIP>"
+    },
+    "arm64": {
+      "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.2/agx-windows-arm64.zip",
+      "hash": "<SHA256_OF_WINDOWS_ARM64_ZIP>"
     }
   },
   "bin": "agx.exe",
@@ -144,6 +148,9 @@ scoop install agx
     "architecture": {
       "64bit": {
         "url": "https://github.com/imsaba16/agx/releases/download/v$version/agx-windows-x86_64.zip"
+      },
+      "arm64": {
+        "url": "https://github.com/imsaba16/agx/releases/download/v$version/agx-windows-arm64.zip"
       }
     }
   }
@@ -201,8 +208,8 @@ irm https://raw.githubusercontent.com/<your-username>/antigravity-backup/main/sc
    ```
 4. GitHub Actions will:
    - Build macOS ARM64 & Intel (`.tar.gz`).
-   - Build Linux x86_64 (`.tar.gz`).
-   - Build Windows x86_64 (`.zip`).
+   - Build Linux x86_64 & ARM64 (`.tar.gz`).
+   - Build Windows x86_64 & ARM64 (`.zip`).
    - Calculate and publish `SHA256SUMS.txt`.
    - Publish GitHub Release assets.
 5. Homebrew formula and Scoop manifest update with the new version and hashes.

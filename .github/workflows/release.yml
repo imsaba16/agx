@@ -108,6 +108,14 @@ jobs:
             archive_ext: zip
             asset_stem: agx-windows-x86_64
 
+          # Windows ARM64 (MSVC)
+          - name: Windows ARM64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            binary_name: agx.exe
+            archive_ext: zip
+            asset_stem: agx-windows-arm64
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -197,7 +205,8 @@ jobs:
           MAC_X86_64_HASH=$(grep "agx-macos-x86_64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
           LINUX_HASH=$(grep "agx-linux-x86_64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
           LINUX_ARM64_HASH=$(grep "agx-linux-arm64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
-          WIN_HASH=$(grep "agx-windows-x86_64.zip" release-assets/SHA256SUMS.txt | awk '{print $1}')
+          WIN_X86_HASH=$(grep "agx-windows-x86_64.zip" release-assets/SHA256SUMS.txt | awk '{print $1}')
+          WIN_ARM64_HASH=$(grep "agx-windows-arm64.zip" release-assets/SHA256SUMS.txt | awk '{print $1}')
 
           # 1. Update Homebrew Tap
           git clone "https://x-access-token:${RELEASE_TOKEN}@github.com/imsaba16/homebrew-agx.git" homebrew-tap
@@ -260,7 +269,11 @@ jobs:
             "architecture": {
               "64bit": {
                 "url": "https://github.com/imsaba16/agx/releases/download/v$VERSION/agx-windows-x86_64.zip",
-                "hash": "$WIN_HASH"
+                "hash": "$WIN_X86_HASH"
+              },
+              "arm64": {
+                "url": "https://github.com/imsaba16/agx/releases/download/v$VERSION/agx-windows-arm64.zip",
+                "hash": "$WIN_ARM64_HASH"
               }
             },
             "bin": "agx.exe",
@@ -269,6 +282,9 @@ jobs:
               "architecture": {
                 "64bit": {
                   "url": "https://github.com/imsaba16/agx/releases/download/v\$version/agx-windows-x86_64.zip"
+                },
+                "arm64": {
+                  "url": "https://github.com/imsaba16/agx/releases/download/v\$version/agx-windows-arm64.zip"
                 }
               }
             }
