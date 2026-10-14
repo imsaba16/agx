@@ -92,6 +92,14 @@ jobs:
             archive_ext: tar.gz
             asset_stem: agx-linux-x86_64
 
+          # Linux ARM64 (GNU)
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary_name: agx
+            archive_ext: tar.gz
+            asset_stem: agx-linux-arm64
+
           # Windows x86_64 (MSVC)
           - name: Windows x86_64
             os: windows-latest
@@ -188,6 +196,7 @@ jobs:
           MAC_ARM64_HASH=$(grep "agx-macos-arm64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
           MAC_X86_64_HASH=$(grep "agx-macos-x86_64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
           LINUX_HASH=$(grep "agx-linux-x86_64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
+          LINUX_ARM64_HASH=$(grep "agx-linux-arm64.tar.gz" release-assets/SHA256SUMS.txt | awk '{print $1}')
           WIN_HASH=$(grep "agx-windows-x86_64.zip" release-assets/SHA256SUMS.txt | awk '{print $1}')
 
           # 1. Update Homebrew Tap
@@ -215,6 +224,10 @@ jobs:
               on_intel do
                 url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
                 sha256 "$LINUX_HASH"
+              end
+              on_arm do
+                url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-arm64.tar.gz"
+                sha256 "$LINUX_ARM64_HASH"
               end
             end
 

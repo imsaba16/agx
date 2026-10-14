@@ -71,6 +71,10 @@ class Agx < Formula
       url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
       sha256 "<SHA256_OF_LINUX_X86_64_TAR_GZ>"
     end
+    on_arm do
+      url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-arm64.tar.gz"
+      sha256 "<SHA256_OF_LINUX_ARM64_TAR_GZ>"
+    end
   end
 
   def install
