@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use agx::bundler::Bundler;
 use agx::config::AntigravityPaths;
 use agx::db::Database;
+use agx::ide::IdeStorage;
 use agx::importer::Importer;
 use agx::models::{ExportOptions, ImportOptions, ProjectExportOptions, ProjectImportOptions};
 use agx::project_bundler::ProjectBundler;
@@ -102,6 +103,17 @@ enum Commands {
         /// Show what would be imported without making any changes
         #[arg(long)]
         dry_run: bool,
+
+        /// Automatically restart Antigravity after import to reflect changes immediately
+        #[arg(long, visible_alias = "auto-restart")]
+        restart: bool,
+    },
+
+    /// Gracefully restart Antigravity to reload projects, conversations, and language server
+    Restart {
+        /// Optional workspace directory to reopen
+        #[arg(short, long)]
+        workspace: Option<PathBuf>,
     },
 
     /// Verify cryptographic integrity (SHA-256) and security safety of an archive (.agbundle or .agproject)
@@ -252,6 +264,10 @@ enum ProjectCommands {
         /// Show what would be imported without making any changes
         #[arg(long)]
         dry_run: bool,
+
+        /// Automatically restart Antigravity after import to reflect changes immediately
+        #[arg(long, visible_alias = "auto-restart")]
+        restart: bool,
     },
 }
 
@@ -290,13 +306,24 @@ fn main() -> Result<()> {
         Some(Commands::Info { bundle, json }) => {
             handle_info(&bundle, json)?;
         }
+        Some(Commands::Restart { workspace }) => {
+            handle_restart(workspace)?;
+        }
         Some(Commands::Import {
             bundle,
             target_workspace,
             overwrite,
             dry_run,
+            restart,
         }) => {
-            handle_import(&paths, bundle, target_workspace, overwrite, dry_run)?;
+            handle_import(
+                &paths,
+                bundle,
+                target_workspace,
+                overwrite,
+                dry_run,
+                restart,
+            )?;
         }
         Some(Commands::Verify { bundle, json }) => {
             handle_verify(&bundle, json)?;
@@ -389,6 +416,7 @@ fn main() -> Result<()> {
                 overwrite,
                 no_customizations,
                 dry_run,
+                restart,
             } => {
                 handle_project_import(
                     &paths,
@@ -397,6 +425,7 @@ fn main() -> Result<()> {
                     overwrite,
                     !no_customizations,
                     dry_run,
+                    restart,
                 )?;
             }
         },
@@ -497,6 +526,11 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
             id: "list",
             title: "List workspace sessions",
             desc: "View formatted conversation history table",
+        },
+        ActionItem {
+            id: "restart",
+            title: "Restart Antigravity",
+            desc: "Reload projects, conversations, and language server",
         },
         ActionItem {
             id: "exit",
@@ -663,22 +697,59 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                         Some(PathBuf::from(ws_path_str))
                     };
 
-                    if is_project_archive(&archive_path) {
-                        let _ = handle_project_import(
+                    let imported_ok = if is_project_archive(&archive_path) {
+                        handle_project_import(
                             paths,
                             archive_path,
-                            target_ws,
+                            target_ws.clone(),
                             false,
                             true,
                             false,
-                        );
+                            false,
+                        )
+                        .is_ok()
                     } else {
-                        let _ = handle_import(paths, archive_path, target_ws, false, false);
+                        handle_import(
+                            paths,
+                            archive_path,
+                            target_ws.clone(),
+                            false,
+                            false,
+                            false,
+                        )
+                        .is_ok()
+                    };
+
+                    if imported_ok && IdeStorage::is_antigravity_running() {
+                        let restart_choice = inquire::Confirm::new(
+                            "Antigravity is currently running. Would you like to restart it now to apply changes immediately?",
+                        )
+                        .with_default(true)
+                        .with_render_config(render_config)
+                        .prompt();
+
+                        if let Ok(true) = restart_choice {
+                            println!("{}", "● Restarting Antigravity...".cyan());
+                            match IdeStorage::restart_antigravity(target_ws.as_deref()) {
+                                Ok(_) => println!(
+                                    "{}",
+                                    "✔ Successfully restarted Antigravity! Changes are now active."
+                                        .green()
+                                        .bold()
+                                ),
+                                Err(e) => {
+                                    eprintln!("{}", format!("⚠ Could not restart Antigravity: {}", e).yellow())
+                                }
+                            }
+                        }
                     }
                 }
             }
             "list" => {
                 let _ = handle_list(paths, None, 20, false);
+            }
+            "restart" => {
+                let _ = handle_restart(Some(cwd.clone()));
             }
             "exit" => break,
             _ => break,
@@ -1058,6 +1129,7 @@ fn handle_import(
     target_workspace: Option<PathBuf>,
     overwrite: bool,
     dry_run: bool,
+    restart: bool,
 ) -> Result<()> {
     let options = ImportOptions {
         bundle_path: bundle_path.clone(),
@@ -1099,6 +1171,38 @@ fn handle_import(
                 .bold()
                 .green()
         );
+
+        if restart {
+            if IdeStorage::is_antigravity_running() {
+                println!(
+                    "{}",
+                    "● Restarting Antigravity to reload projects and language server...".cyan()
+                );
+                match IdeStorage::restart_antigravity(options.target_workspace.as_deref()) {
+                    Ok(_) => println!(
+                        "{}",
+                        "✔ Successfully restarted Antigravity! Changes are now active."
+                            .green()
+                            .bold()
+                    ),
+                    Err(e) => {
+                        eprintln!("{}", format!("⚠ Failed to restart Antigravity: {}", e).yellow())
+                    }
+                }
+            } else {
+                println!(
+                    "{}",
+                    "Antigravity is not currently running. Sessions will be loaded on next startup."
+                        .dimmed()
+                );
+            }
+        } else if IdeStorage::is_antigravity_running() {
+            println!(
+                "{}",
+                "💡 Tip: Antigravity is currently running. Run 'agx restart' (or pass --restart) to view your imported session immediately."
+                    .dimmed()
+            );
+        }
     }
     println!();
 
@@ -1502,6 +1606,7 @@ fn handle_project_import(
     overwrite: bool,
     restore_customizations: bool,
     dry_run: bool,
+    restart: bool,
 ) -> Result<()> {
     let target_ws = target_workspace
         .or_else(|| std::env::current_dir().ok())
@@ -1572,8 +1677,73 @@ fn handle_project_import(
             .bold()
             .green()
         );
+
+        if restart {
+            if IdeStorage::is_antigravity_running() {
+                println!(
+                    "{}",
+                    "● Restarting Antigravity to reload projects and language server...".cyan()
+                );
+                match IdeStorage::restart_antigravity(Some(&options.target_workspace)) {
+                    Ok(_) => println!(
+                        "{}",
+                        "✔ Successfully restarted Antigravity! Changes are now active."
+                            .green()
+                            .bold()
+                    ),
+                    Err(e) => {
+                        eprintln!("{}", format!("⚠ Failed to restart Antigravity: {}", e).yellow())
+                    }
+                }
+            } else {
+                println!(
+                    "{}",
+                    "Antigravity is not currently running. Projects and sessions will be loaded on next startup."
+                        .dimmed()
+                );
+            }
+        } else if IdeStorage::is_antigravity_running() {
+            println!(
+                "{}",
+                "💡 Tip: Antigravity is currently running. Run 'agx restart' (or pass --restart) to view your imported project and conversations immediately."
+                    .dimmed()
+            );
+        }
     }
     println!();
 
+    Ok(())
+}
+
+fn handle_restart(workspace: Option<PathBuf>) -> Result<()> {
+    let ws = workspace.or_else(|| std::env::current_dir().ok());
+    if IdeStorage::is_antigravity_running() {
+        println!(
+            "{}",
+            "● Restarting Antigravity to reload projects and language server...".cyan()
+        );
+        match IdeStorage::restart_antigravity(ws.as_deref()) {
+            Ok(_) => println!(
+                "{}",
+                "✔ Antigravity restarted successfully! Projects and sessions are now loaded."
+                    .green()
+                    .bold()
+            ),
+            Err(e) => eprintln!("{}", format!("⚠ Failed to restart Antigravity: {}", e).yellow()),
+        }
+    } else {
+        println!(
+            "{}",
+            "● Antigravity is not currently running. Launching...".cyan()
+        );
+        match IdeStorage::launch_antigravity(ws.as_deref()) {
+            Ok(_) => println!(
+                "{}",
+                "✔ Antigravity launched successfully!".green().bold()
+            ),
+            Err(e) => eprintln!("{}", format!("⚠ Failed to launch Antigravity: {}", e).yellow()),
+        }
+    }
+    println!();
     Ok(())
 }
