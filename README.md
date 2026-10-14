@@ -96,7 +96,7 @@ cargo install --path .
 Verify your installation:
 ```bash
 agx --version
-# agx 1.0.0-rc.2
+# agx 1.0.0-rc.3
 ```
 
 ---

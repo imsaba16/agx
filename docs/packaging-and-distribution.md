@@ -52,23 +52,28 @@ Add the following Ruby formula file:
 class Agx < Formula
   desc "Context exchange, session diffing, search, and backup engine for Google Antigravity"
   homepage "https://github.com/imsaba16/agx"
-  version "1.0.0-rc.2"
+  version "1.0.0-rc.3"
   license "Apache-2.0"
 
   on_macos do
-    if Hardware::CPU.arm?
+    on_arm do
       url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-arm64.tar.gz"
       sha256 "<SHA256_OF_MACOS_ARM64_TAR_GZ>"
-    else
+    end
+    on_intel do
       url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-x86_64.tar.gz"
       sha256 "<SHA256_OF_MACOS_X86_64_TAR_GZ>"
     end
   end
 
   on_linux do
-    if Hardware::CPU.intel?
+    on_intel do
       url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
       sha256 "<SHA256_OF_LINUX_X86_64_TAR_GZ>"
+    end
+    on_arm do
+      url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-arm64.tar.gz"
+      sha256 "<SHA256_OF_LINUX_ARM64_TAR_GZ>"
     end
   end
 
@@ -123,14 +128,18 @@ scoop install agx
 
 ```json
 {
-  "version": "1.0.0-rc.2",
-  "description": "Context exchange, session diffing, search, and backup engine for Google Antigravity",
+  "version": "1.0.0-rc.3",
+  "description": "Enterprise context exchange, session diffing, search, and backup engine for Google Antigravity",
   "homepage": "https://github.com/imsaba16/agx",
   "license": "Apache-2.0",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.2/agx-windows-x86_64.zip",
-      "hash": "<SHA256_OF_WINDOWS_ZIP>"
+      "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.3/agx-windows-x86_64.zip",
+      "hash": "<SHA256_OF_WINDOWS_X86_64_ZIP>"
+    },
+    "arm64": {
+      "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.3/agx-windows-arm64.zip",
+      "hash": "<SHA256_OF_WINDOWS_ARM64_ZIP>"
     }
   },
   "bin": "agx.exe",
@@ -139,6 +148,9 @@ scoop install agx
     "architecture": {
       "64bit": {
         "url": "https://github.com/imsaba16/agx/releases/download/v$version/agx-windows-x86_64.zip"
+      },
+      "arm64": {
+        "url": "https://github.com/imsaba16/agx/releases/download/v$version/agx-windows-arm64.zip"
       }
     }
   }
@@ -163,7 +175,7 @@ Use Microsoft's official `wingetcreate` CLI tool:
 winget install wingetcreate
 
 # Generate manifest from release URL
-wingetcreate new https://github.com/<your-username>/antigravity-backup/releases/download/v1.0.0-rc.2/agx-windows-x86_64.zip
+wingetcreate new https://github.com/<your-username>/antigravity-backup/releases/download/v1.0.0-rc.3/agx-windows-x86_64.zip
 ```
 Follow the interactive prompts; `wingetcreate` automatically tests the manifest and creates a PR to `microsoft/winget-pkgs`.
 
@@ -196,8 +208,8 @@ irm https://raw.githubusercontent.com/<your-username>/antigravity-backup/main/sc
    ```
 4. GitHub Actions will:
    - Build macOS ARM64 & Intel (`.tar.gz`).
-   - Build Linux x86_64 (`.tar.gz`).
-   - Build Windows x86_64 (`.zip`).
+   - Build Linux x86_64 & ARM64 (`.tar.gz`).
+   - Build Windows x86_64 & ARM64 (`.zip`).
    - Calculate and publish `SHA256SUMS.txt`.
    - Publish GitHub Release assets.
 5. Homebrew formula and Scoop manifest update with the new version and hashes.

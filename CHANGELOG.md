@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0-rc.3] - 2026-10-14
+
+### Added
+- **Multi-Platform Release Matrix (Linux ARM64 & Windows ARM64)**:
+  - Added native Linux ARM64 (`aarch64-unknown-linux-gnu`) via `ubuntu-24.04-arm` runners.
+  - Added native Windows ARM64 (`aarch64-pc-windows-msvc`) cross-compilation pipeline.
+  - Automated dual-architecture Scoop bucket deployment (`64bit` and `arm64`) in `bucket/agx.json`.
+- **Interactive Project & Workspace Selection in TUI**:
+  - Running `agx` outside of a project root (e.g., from `Downloads`) now dynamically inspects the database and presents an interactive project picker rather than failing or cancelling silently.
+  - Surfaced all export error diagnostics and added confirmation prompts before returning to the dashboard.
+
+### Fixed
+- **Windows IDE Launch & Process Lifecycle**:
+  - Implemented automatic resolution of the Antigravity installation path across `%LOCALAPPDATA%\Programs\antigravity`, `%ProgramFiles%`, and system PATH.
+  - Replaced `cmd.exe /c start` with direct detached process invocation (`DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`), eliminating the "Windows cannot find 'Antigravity.exe'" dialog.
+  - Added case-insensitive process inspection and fallback force termination (`taskkill /F`) if graceful termination times out.
+- **Homebrew Formula Architecture Compatibility**:
+  - Modernized `Formula/agx.rb` to use `on_intel` and `on_arm` blocks for macOS and Linux, resolving `formula requires at least a URL` errors on AMD and ARM64 Linux systems.
+- **Windows Path Normalization in Database Queries**:
+  - Normalized drive letters (`c:` vs `C:`), slashes (`\` vs `/`), and URL encoding (`%3a`) when querying conversation workspace associations.
+- **Linter & Formatting Cleanliness**:
+  - Fixed Windows-specific `clippy::needless_borrows_for_generic_args` warnings and ensured zero compiler/clippy warnings under strict `-D warnings`.
+
+---
+
 ## [1.0.0-rc.2] - 2026-10-14
 
 ### Added

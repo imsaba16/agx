@@ -1,6 +1,6 @@
 [package]
 name = "agx"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 edition = "2021"
 authors = ["Antigravity Developers"]
 description = "agx: Antigravity eXtension — Enterprise context exchange, session diffing, zero-decompression search, and backup engine for Google Antigravity."
