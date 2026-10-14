@@ -111,8 +111,9 @@ When the user asks to import a colleague's session or restore a backup:
 
 2. Confirm with the user and execute import, binding to the current or specified workspace:
    ```bash
-   ~/.cargo/bin/agx import <path-to-bundle.agbundle> --target-workspace <workspace-path>
+   ~/.cargo/bin/agx import <path-to-bundle.agbundle> --target-workspace <workspace-path> --restart
    ```
+   *(Passing `--restart` or running `agx restart` ensures Antigravity's language server daemon reloads the protobuf summaries immediately).*
 
 3. Inform the user that the session is now registered in Antigravity and visible in their conversation list.
 
@@ -141,8 +142,8 @@ When the user asks to backup, export, or import the **entire project** (all conv
    # Preview with dry-run
    ~/.cargo/bin/agx project import <path-to-project.agproject> --dry-run
 
-   # Restore into target repository
-   ~/.cargo/bin/agx project import <path-to-project.agproject> --target-workspace <target-repo>
+   # Restore into target repository and restart Antigravity to reflect changes
+   ~/.cargo/bin/agx project import <path-to-project.agproject> --target-workspace <target-repo> --restart
    ```
 
 ---
@@ -169,9 +170,12 @@ Reports:
 
 ---
 
-### 7. Power-User Commands (`diff`, `search`, `extract`, `cat`, `explore`)
+### 7. Power-User Commands (`diff`, `search`, `extract`, `cat`, `explore`, `restart`)
 
 ```bash
+# Gracefully restart Antigravity to reload projects and language server
+~/.cargo/bin/agx restart [--workspace <path>]
+
 # Compare plans between two archives or against current workspace
 ~/.cargo/bin/agx diff <bundle_a> [bundle_b] [--local]
 

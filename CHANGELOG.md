@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] - 2026-10-14
+
+### Added
+- **Protobuf Summaries Store Synchronization**:
+  - Implemented zero-dependency Protobuf wire encoding/decoding engine (`summaries_pb.rs`) for `agyhub_summaries_proto.pb` and `jetbox_summaries_proto.pb`.
+  - Ensures imported projects and conversation histories render in the Antigravity sidebar, project drawers, and prompt snippet drawers.
+  - Automatic collision-free UUID remapping for trajectory metadata and fallback synthesis of valid `CascadeTrajectorySummary` blobs.
+- **IDE Lifecycle & Automatic Restart**:
+  - Added `agx restart` command with cross-platform support (macOS AppleScript / open, Linux SIGTERM / respawn, Windows taskkill / start).
+  - Added `--restart` (alias: `--auto-restart`) flag to `agx import` and `agx project import`.
+  - Added interactive prompt offering to gracefully restart Antigravity upon completing an archive import.
+- **Prioritized Interactive Dashboard**:
+  - Reorganized the interactive dashboard (`agx`) into a clean, priority-based 5-item hierarchy: `Import Archive...`, `Export...`, `Interactive TUI Explorer`, `Restart Antigravity`, `More Tools & Utilities...`, eliminating terminal overflow and visual clutter.
+
+---
+
 ## [1.0.0-rc.1] - 2026-10-13
 
 ### Changed

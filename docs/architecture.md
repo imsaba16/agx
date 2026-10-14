@@ -142,3 +142,49 @@ The power-user commands (`agx search`, `agx cat`, `agx extract`, `agx diff`) ope
 - **Zero Full Extraction**: Operations unpack individual files into in-memory buffers or stream them directly without touching the host filesystem.
 - **Fast Search Indexing**: Transcripts are streamed line-by-line via JSON parser iterators, matching user input, thinking steps, and tool responses with minimal memory footprint.
 - **Syntax Highlighting**: `agx cat` dynamically identifies MIME types and file extensions, applying ANSI 256-color palettes directly in the terminal pager.
+
+---
+
+## 4. Storage Synchronization & IDE Lifecycle Engine
+
+```mermaid
+flowchart TD
+    subgraph Import [agx Import Pipeline]
+        A[.agproject / .agbundle] --> B[Remapper & Normalizer]
+        B --> C[SQLite DB Sync]
+        B --> D[FTS5 Full-Text Index]
+        B --> E[Protobuf Wire Engine]
+    end
+
+    subgraph Storage [Antigravity Storage Layers]
+        C --> DB[(conversation_summaries.db)]
+        D --> FTS[(FTS5 Virtual Tables)]
+        E --> PB[(agyhub_summaries_proto.pb)]
+        B --> CFG[(config/projects/<id>.json)]
+    end
+
+    subgraph Runtime [Antigravity Runtime]
+        PB --> LS[language_server daemon]
+        CFG --> LS
+        LS --> UI[Antigravity IDE & Project Drawer]
+        M[agx restart / --restart] -.->|Graceful Quits & Relaunches| LS
+    end
+```
+
+### 4.1 Dual-Storage Synchronization
+Antigravity operates a hybrid storage layer:
+1. **SQLite Database (`conversation_summaries.db`)**: Stores indexed conversation summaries and metadata.
+2. **FTS5 Virtual Search Table**: Indexes prompt snippets and chunks for instant fuzzy search across sessions.
+3. **Protobuf Store (`agyhub_summaries_proto.pb`)**: A binary Protobuf `SummariesState` (`CascadeTrajectorySummaries`) read by the Go `language_server` daemon (`subclient_type hub`).
+4. **Project Configs (`config/projects/<id>.json`)**: Defines project identities, resource git folders, and permission policies.
+
+`agx` implements a zero-dependency binary Protobuf parser and serializer (`summaries_pb.rs`) that unpacks protobuf wire format, performs collision-free UUID remapping, synthesizes missing summary blobs, and synchronizes both SQLite and Protobuf stores atomically upon import.
+
+### 4.2 IDE Daemon Lifecycle & Automatic Restart
+- The `language_server` daemon caches summaries and project associations in memory upon startup (`trigger=startup`).
+- Electron window reloads (`Cmd+R`) only refresh the renderer webview and reattach to the running daemon without reloading disk state.
+- `agx` introduces cross-platform graceful restart orchestration:
+  - **macOS**: Gracefully quits the application via AppleScript (`tell app "Antigravity" to quit`), polls for process termination, and relaunches via `open -a Antigravity` (restoring workspace tabs).
+  - **Linux**: Signals `SIGTERM` to the process group, ensures file lock release, and respawns the binary.
+  - **Windows**: Executes graceful termination via `taskkill /IM Antigravity.exe` and relaunches the process.
+- Can be triggered automatically via `--restart` (`--auto-restart`) or manually with `agx restart`.

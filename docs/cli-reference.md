@@ -34,6 +34,7 @@ These options are available on all `agx` invocations:
 | [`agx export`](#agx-export) | Export a single conversation into an `.agbundle` archive |
 | [`agx info`](#agx-info) | Inspect and display metadata from an `.agbundle` or `.agproject` file |
 | [`agx import`](#agx-import) | Restore a conversation from an `.agbundle` into an active brain |
+| [`agx restart`](#agx-restart) | Gracefully restart Antigravity and language server daemon |
 | [`agx verify`](#agx-verify) | Run cryptographic SHA-256 integrity and security audits on archives |
 | [`agx diff`](#agx-diff) | Compare two bundles or an archive against the current live workspace |
 | [`agx search`](#agx-search) | Search archived transcripts, thoughts, and artifacts without extracting |
@@ -133,13 +134,48 @@ agx import [OPTIONS] <ARCHIVE_PATH>
 - `<ARCHIVE_PATH>`: Path to the `.agbundle` file to import.
 
 #### Options:
-- `--force`: Overwrite existing conversation if ID conflict exists.
-- `--as-new-id`: Assign a fresh UUID during import to avoid overwriting existing sessions.
+- `-t, --target-workspace <PATH>`: Target local workspace directory to rebind `{{WORKSPACE_ROOT}}` to (defaults to current working directory).
+- `--overwrite`: Overwrite if conversation ID already exists locally (otherwise safely forks with a fresh UUID).
+- `--dry-run`: Show what would be imported without modifying disk or database.
+- `--restart` (alias: `--auto-restart`): Automatically restart Antigravity after import to reflect changes immediately.
 
 #### Example:
 ```bash
-agx import ./backup-session.agbundle
-agx import ./backup-session.agbundle --as-new-id
+# Preview import
+agx import ./backup-session.agbundle --dry-run
+
+# Import and bind to local workspace
+agx import ./backup-session.agbundle --target-workspace /path/to/project
+
+# Import and restart Antigravity automatically
+agx import ./backup-session.agbundle --restart
+```
+
+---
+
+### `agx restart`
+
+Gracefully restart Antigravity and its background language server daemon to immediately reflect newly imported projects, sessions, or configuration changes.
+
+```bash
+agx restart [OPTIONS]
+```
+
+#### Options:
+- `-w, --workspace <WORKSPACE>`: Optional workspace directory to reopen after restarting.
+
+#### Platform Behavior:
+- **macOS**: Gracefully quits Antigravity via AppleScript, waits for process termination, releases file locks, and relaunches via `open -a Antigravity` (restoring workspace tabs).
+- **Linux**: Signals `SIGTERM` to the Antigravity process group, waits for socket release, and respawns the desktop process.
+- **Windows**: Gracefully signals `Antigravity.exe` via `taskkill`, cleans lock handles, and respawns via `start Antigravity.exe`.
+
+#### Example:
+```bash
+# Restart Antigravity
+agx restart
+
+# Restart and open specific workspace
+agx restart --workspace /Users/dev/my-project
 ```
 
 ---
@@ -308,8 +344,20 @@ agx project export [OPTIONS]
 ```bash
 agx project import [OPTIONS] <ARCHIVE_PATH>
 ```
-- `-w, --workspace <PATH>`: Target workspace root to unpack project configurations into.
-- `--force`: Overwrite existing files or configurations.
+- `-t, --target-workspace <PATH>`: Target local workspace directory to rebind the project and conversations to.
+- `--overwrite`: Overwrite existing sessions and project customizations if present.
+- `--no-customizations`: Skip restoring workspace customizations (`.agents/skills`, rules, MCP).
+- `--dry-run`: Show what would be imported without making any changes to files or databases.
+- `--restart` (alias: `--auto-restart`): Automatically restart Antigravity after import to reflect changes immediately.
+
+#### Example:
+```bash
+# Preview project import
+agx project import ./my-project.agproject --target-workspace ~/code/my-project --dry-run
+
+# Import and restart Antigravity to reflect changes
+agx project import ./my-project.agproject --target-workspace ~/code/my-project --restart
+```
 
 #### 3. `agx project info`
 ```bash
@@ -341,6 +389,29 @@ agx completion bash | sudo tee /etc/bash_completion.d/agx
 # Fish
 agx completion fish > ~/.config/fish/completions/agx.fish
 ```
+
+### Interactive Dashboard (`agx`)
+
+Running `agx` without subcommands launches an interactive terminal dashboard. The interface is organized in a priority-driven hierarchy:
+
+```text
+agx ─ Select an action:
+❯ Import Archive...            Restore .agproject or .agbundle into Antigravity
+  Export...                    Package current project or conversations
+  Interactive TUI Explorer     Split-screen session navigator & live preview
+  Restart Antigravity          Reload projects, conversations & language server
+  More Tools & Utilities...    Diff, Search, Extract, Inspect & Verify
+  Exit                         Close agx
+```
+
+- **`Import Archive...`**: Prompts for archive path and target workspace. Automatically detects if Antigravity is running and offers a graceful restart on completion.
+- **`Export...`**: Opens a clean sub-choice:
+  - *Export entire project (`.agproject`)*
+  - *Export active conversation (`.agbundle`)*
+  - *Browse & export past sessions*
+- **`Interactive TUI Explorer`**: Full-screen split-pane navigation with real-time markdown rendering.
+- **`Restart Antigravity`**: Shuts down and restarts Antigravity, reloading `language_server` and all stores.
+- **`More Tools & Utilities...`**: Submenu housing `Diff`, `Search`, `Extract`, `Inspect`, `Verify`, and `List workspace sessions`.
 
 ---
 
