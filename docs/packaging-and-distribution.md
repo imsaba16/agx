@@ -56,17 +56,18 @@ class Agx < Formula
   license "Apache-2.0"
 
   on_macos do
-    if Hardware::CPU.arm?
+    on_arm do
       url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-arm64.tar.gz"
       sha256 "<SHA256_OF_MACOS_ARM64_TAR_GZ>"
-    else
+    end
+    on_intel do
       url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-x86_64.tar.gz"
       sha256 "<SHA256_OF_MACOS_X86_64_TAR_GZ>"
     end
   end
 
   on_linux do
-    if Hardware::CPU.intel?
+    on_intel do
       url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
       sha256 "<SHA256_OF_LINUX_X86_64_TAR_GZ>"
     end

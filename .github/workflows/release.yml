@@ -201,17 +201,18 @@ jobs:
             license "Apache-2.0"
 
             on_macos do
-              if Hardware::CPU.arm?
+              on_arm do
                 url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-arm64.tar.gz"
                 sha256 "$MAC_ARM64_HASH"
-              else
+              end
+              on_intel do
                 url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-macos-x86_64.tar.gz"
                 sha256 "$MAC_X86_64_HASH"
               end
             end
 
             on_linux do
-              if Hardware::CPU.intel?
+              on_intel do
                 url "https://github.com/imsaba16/agx/releases/download/v#{version}/agx-linux-x86_64.tar.gz"
                 sha256 "$LINUX_HASH"
               end
