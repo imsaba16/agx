@@ -133,6 +133,18 @@ fn test_project_export_import_roundtrip() {
     db.upsert_conversation(&conv1).unwrap();
     db.upsert_conversation(&conv2).unwrap();
 
+    // Create source project config file
+    let src_proj_file = source_paths.project_config_file("test-proj");
+    fs::create_dir_all(src_proj_file.parent().unwrap()).unwrap();
+    fs::write(
+        &src_proj_file,
+        format!(
+            r#"{{"id":"test-proj","name":"test-proj","projectResources":{{"resources":[{{"gitFolder":{{"folderUri":"{}"}}}}]}}}}"#,
+            source_uri
+        ),
+    )
+    .unwrap();
+
     // 3. Create mock conversation.db files & brain directories
     let convs_dir = source_paths.conversations_dir();
     fs::create_dir_all(&convs_dir).unwrap();
@@ -314,6 +326,13 @@ fn test_project_export_import_roundtrip() {
         assert!(!row.2.is_empty(), "Workspace must not be empty in FTS");
         assert!(!row.3.is_empty(), "Title must not be empty in FTS");
     }
+
+    // Verify ~/.gemini/config/projects/test-proj.json was restored and remapped
+    let target_proj_file = target_paths.project_config_file("test-proj");
+    assert!(target_proj_file.exists(), "Target project config file must be created on import");
+    let proj_content = fs::read_to_string(&target_proj_file).unwrap();
+    assert!(proj_content.contains(&target_uri), "Project config must contain remapped target_uri");
+    assert!(proj_content.contains("\"id\": \"test-proj\""));
 
     // 9. Verify safe-forking when destination already has colliding conversation IDs
     let (fork_count, _) =

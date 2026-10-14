@@ -59,6 +59,7 @@ impl ProjectImporter {
         let mut limit_guard = crate::security::TarLimitGuard::default();
 
         let mut archive = crate::bundler::open_archive(&options.bundle_path)?;
+        let mut project_config_content: Option<String> = None;
 
         for entry_res in archive.entries()? {
             let mut entry = entry_res?;
@@ -70,6 +71,11 @@ impl ProjectImporter {
 
             if path_str == "project_manifest.json" {
                 continue;
+            } else if path_str == "project_config.json" {
+                let mut text = String::new();
+                if entry.read_to_string(&mut text).is_ok() {
+                    project_config_content = Some(PathRemapper::remap_import(&text, target_ws));
+                }
             } else if path_str.starts_with("customizations/") {
                 if options.restore_customizations {
                     let rel = path_buf.strip_prefix("customizations")?;
@@ -204,13 +210,10 @@ impl ProjectImporter {
             ws_name.clone()
         };
 
-        if paths.summaries_db().exists() {
+        // Determine target project ID
+        let target_project_id = if paths.summaries_db().exists() {
             let db = Database::new(&paths.summaries_db());
-
-            // Check if this workspace already has a project ID registered in Antigravity
-            let target_project_id = if let Ok(Some(existing_pid)) =
-                db.find_project_id_for_workspace(target_ws)
-            {
+            if let Ok(Some(existing_pid)) = db.find_project_id_for_workspace(target_ws) {
                 if !existing_pid.trim().is_empty() {
                     existing_pid
                 } else {
@@ -241,12 +244,40 @@ impl ProjectImporter {
                             .map(|c| c.project_id.clone())
                             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
                     })
-            };
-
-            // Register project in Antigravity's IDE app_storage.json
-            if let Some(storage_path) = paths.ide_app_storage() {
-                let _ = crate::ide::IdeStorage::register_project(&storage_path, &target_project_id);
             }
+        } else {
+            manifest
+                .project_id
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| {
+                    manifest
+                        .conversations
+                        .iter()
+                        .find(|c| !c.project_id.trim().is_empty())
+                        .map(|c| c.project_id.clone())
+                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+                })
+        };
+
+        // Always ensure ~/.gemini/config/projects/<target_project_id>.json exists with correct workspace URI
+        let project_config_path = paths.project_config_file(&target_project_id);
+        let ws_uri = crate::remapper::to_file_uri(target_ws);
+        let _ = crate::ide::IdeStorage::ensure_project_config(
+            &project_config_path,
+            &target_project_id,
+            &project_name,
+            &ws_uri,
+            project_config_content.as_deref(),
+        );
+
+        // Register project in Antigravity's IDE app_storage.json
+        if let Some(storage_path) = paths.ide_app_storage() {
+            let _ = crate::ide::IdeStorage::register_project(&storage_path, &target_project_id);
+        }
+
+        if paths.summaries_db().exists() {
+            let db = Database::new(&paths.summaries_db());
 
             for conv in &manifest.conversations {
                 let orig_id = &conv.conversation_id;

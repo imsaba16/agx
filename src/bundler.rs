@@ -5,7 +5,7 @@ use crate::sanitizer::SecretSanitizer;
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use rayon::prelude::*;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use tar::{Archive, Builder, Header};
@@ -159,6 +159,26 @@ impl Bundler {
             db_bytes_opt = Some(db_bytes);
         }
 
+        let mut project_config_bytes_opt = None;
+        if !manifest.conversation.project_id.trim().is_empty() {
+            let project_json_path = paths.project_config_file(&manifest.conversation.project_id);
+            if project_json_path.exists() {
+                if let Ok(content) = fs::read_to_string(&project_json_path) {
+                    let mut processed = content;
+                    if let Some(ref remap) = remapper {
+                        processed = remap.remap_export(&processed);
+                    }
+                    if let Some(ref sanit) = sanitizer {
+                        processed = sanit.sanitize(&processed);
+                    }
+                    let bytes = processed.into_bytes();
+                    let sha = crate::security::compute_sha256(&bytes);
+                    checksums.insert("project_config.json".to_string(), sha);
+                    project_config_bytes_opt = Some(bytes);
+                }
+            }
+        }
+
         let mut verified_pfs = Vec::new();
         for pf_res in processed_files {
             let pf = pf_res?;
@@ -195,7 +215,16 @@ impl Bundler {
             tar.append_data(&mut db_header, "conversation.db", &db_bytes[..])?;
         }
 
-        // 3. Write parallel-processed brain files
+        // 3. Write project_config.json if exists
+        if let Some(pc_bytes) = project_config_bytes_opt {
+            let mut pc_header = Header::new_gnu();
+            pc_header.set_size(pc_bytes.len() as u64);
+            pc_header.set_mode(0o644);
+            pc_header.set_cksum();
+            tar.append_data(&mut pc_header, "project_config.json", &pc_bytes[..])?;
+        }
+
+        // 4. Write parallel-processed brain files
         for pf in verified_pfs {
             let mut file_header = Header::new_gnu();
             file_header.set_size(pf.data.len() as u64);

@@ -202,6 +202,12 @@ impl ProjectBundler {
             }
         }
 
+        // 3. Package project definition (~/.gemini/config/projects/<id>.json) if it exists
+        let project_json_path = paths.project_config_file(&primary_project_id);
+        if project_json_path.exists() {
+            file_jobs.push((project_json_path, "project_config.json".to_string(), true));
+        }
+
         // Parallel file processing via Rayon
         let remapper_ref = &remapper;
         let sanitizer_ref = sanitizer.as_ref();

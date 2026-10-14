@@ -102,4 +102,64 @@ impl IdeStorage {
             Ok(Vec::new())
         }
     }
+
+    /// Creates or updates ~/.gemini/config/projects/<project_id>.json so Antigravity's
+    /// Language Server can load the project definition and its associated gitFolder workspace.
+    pub fn ensure_project_config(
+        project_file_path: &Path,
+        project_id: &str,
+        project_name: &str,
+        workspace_uri: &str,
+        custom_content: Option<&str>,
+    ) -> Result<()> {
+        if let Some(parent) = project_file_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let mut project_json: serde_json::Value = if let Some(content) = custom_content {
+            serde_json::from_str(content).unwrap_or_else(|_| serde_json::json!({}))
+        } else if project_file_path.exists() {
+            let content = fs::read_to_string(project_file_path)?;
+            serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}))
+        } else {
+            serde_json::json!({})
+        };
+
+        project_json["id"] = serde_json::json!(project_id);
+        project_json["name"] = serde_json::json!(project_name);
+        project_json["projectResources"] = serde_json::json!({
+            "resources": [
+                {
+                    "gitFolder": {
+                        "folderUri": workspace_uri,
+                        "defaultBranch": "main"
+                    }
+                }
+            ]
+        });
+
+        if project_json.get("permissionGrants").is_none() {
+            project_json["permissionGrants"] = serde_json::json!({
+                "permissionGrants": {},
+                "v2Migrated": true
+            });
+        }
+        if project_json.get("settings").is_none() {
+            project_json["settings"] = serde_json::json!({
+                "fileAccessPolicy": "AGENT_SETTING_POLICY_ALLOW",
+                "sandboxMode": false,
+                "autoExecutionPolicy": "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                "permissionPreset": "AGENT_PERMISSION_PRESET_TURBO"
+            });
+        }
+        if project_json.get("isWorkspaceOnly").is_none() {
+            project_json["isWorkspaceOnly"] = serde_json::json!(false);
+        }
+
+        fs::write(
+            project_file_path,
+            serde_json::to_string_pretty(&project_json)?,
+        )?;
+        Ok(())
+    }
 }

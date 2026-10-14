@@ -52,6 +52,7 @@ impl Importer {
         // 3. Extract and remap into atomic staging directory
         let mut archive = crate::bundler::open_archive(&options.bundle_path)?;
         let mut has_conv_db = false;
+        let mut project_config_content: Option<String> = None;
 
         for entry_res in archive.entries()? {
             let mut entry = entry_res?;
@@ -63,6 +64,15 @@ impl Importer {
 
             if path_str == "manifest.json" {
                 continue;
+            } else if path_str == "project_config.json" {
+                let mut text = String::new();
+                if entry.read_to_string(&mut text).is_ok() {
+                    if let Some(ref target_ws) = options.target_workspace {
+                        project_config_content = Some(PathRemapper::remap_import(&text, target_ws));
+                    } else {
+                        project_config_content = Some(text);
+                    }
+                }
             } else if path_str == "conversation.db" {
                 entry.unpack(&staging_conv_db)?;
                 has_conv_db = true;
@@ -148,6 +158,19 @@ impl Importer {
                         updated_summary.project_id = existing_pid;
                     }
                 }
+                if updated_summary.project_id.trim().is_empty() {
+                    updated_summary.project_id = uuid::Uuid::new_v4().to_string();
+                }
+
+                let project_config_path = paths.project_config_file(&updated_summary.project_id);
+                let ws_uri = crate::remapper::to_file_uri(target_ws);
+                let _ = crate::ide::IdeStorage::ensure_project_config(
+                    &project_config_path,
+                    &updated_summary.project_id,
+                    &project_name,
+                    &ws_uri,
+                    project_config_content.as_deref(),
+                );
             }
 
             // Register project in Antigravity app_storage.json if project_id exists

@@ -53,6 +53,18 @@ impl AntigravityPaths {
         self.base_dir.join("mcp")
     }
 
+    pub fn projects_config_dir(&self) -> PathBuf {
+        self.base_dir
+            .parent()
+            .unwrap_or(&self.base_dir)
+            .join("config")
+            .join("projects")
+    }
+
+    pub fn project_config_file(&self, project_id: &str) -> PathBuf {
+        self.projects_config_dir().join(format!("{}.json", project_id))
+    }
+
     pub fn conversation_db(&self, conversation_id: &str) -> PathBuf {
         self.conversations_dir()
             .join(format!("{}.db", conversation_id))
