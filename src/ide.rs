@@ -51,7 +51,8 @@ impl IdeStorage {
             if !list.contains(&project_id.to_string()) {
                 list.push(project_id.to_string());
                 if order_val.is_string() {
-                    storage["projectsOrder"] = serde_json::Value::String(serde_json::to_string(&list)?);
+                    storage["projectsOrder"] =
+                        serde_json::Value::String(serde_json::to_string(&list)?);
                 } else {
                     storage["projectsOrder"] = serde_json::json!(list);
                 }
@@ -161,5 +162,188 @@ impl IdeStorage {
             serde_json::to_string_pretty(&project_json)?,
         )?;
         Ok(())
+    }
+
+    /// Checks whether Antigravity (the IDE application) is currently running.
+    pub fn is_antigravity_running() -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(output) = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg("application \"Antigravity\" is running")
+                .output()
+            {
+                let text = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .to_lowercase();
+                if text == "true" {
+                    return true;
+                }
+            }
+            false
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(status) = std::process::Command::new("pgrep")
+                .arg("-f")
+                .arg("antigravity")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+            {
+                return status.success();
+            }
+            false
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(output) = std::process::Command::new("tasklist")
+                .args(["/FI", "IMAGENAME eq Antigravity.exe"])
+                .output()
+            {
+                let text = String::from_utf8_lossy(&output.stdout);
+                return text.contains("Antigravity.exe");
+            }
+            false
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
+            false
+        }
+    }
+
+    /// Launches Antigravity, optionally focusing or opening the specified workspace directory.
+    pub fn launch_antigravity(target_workspace: Option<&Path>) -> Result<()> {
+        #[cfg(target_os = "macos")]
+        {
+            let mut cmd = std::process::Command::new("open");
+            cmd.arg("-a").arg("Antigravity");
+            if let Some(ws) = target_workspace {
+                cmd.arg(ws.as_os_str());
+            }
+            let status = cmd.status()?;
+            if !status.success() {
+                anyhow::bail!("Failed to launch Antigravity via 'open -a Antigravity'");
+            }
+            Ok(())
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let mut cmd = std::process::Command::new("antigravity");
+            if let Some(ws) = target_workspace {
+                cmd.arg(ws.as_os_str());
+            }
+            cmd.spawn()?;
+            Ok(())
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let mut cmd = std::process::Command::new("cmd");
+            cmd.args(["/c", "start", "", "Antigravity.exe"]);
+            if let Some(ws) = target_workspace {
+                cmd.arg(ws.as_os_str());
+            }
+            cmd.spawn()?;
+            Ok(())
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
+            anyhow::bail!("Unsupported platform for launching Antigravity");
+        }
+    }
+
+    /// Gracefully restarts Antigravity if it is running, reloading the Language Server
+    /// and reflecting all newly imported projects and conversations.
+    /// Returns Ok(true) if restarted, or Ok(false) if it was not running.
+    pub fn restart_antigravity(target_workspace: Option<&Path>) -> Result<bool> {
+        if !Self::is_antigravity_running() {
+            return Ok(false);
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            // Gracefully tell Antigravity to quit
+            let _ = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg("tell application \"Antigravity\" to quit")
+                .output();
+
+            // Wait up to 5 seconds for Antigravity process to exit
+            let start = std::time::Instant::now();
+            while start.elapsed() < std::time::Duration::from_secs(5) {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if !Self::is_antigravity_running() {
+                    break;
+                }
+            }
+
+            // Force kill if still running after timeout
+            if Self::is_antigravity_running() {
+                let _ = std::process::Command::new("pkill")
+                    .arg("-TERM")
+                    .arg("-f")
+                    .arg("Antigravity")
+                    .output();
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
+
+            // Small delay for file locks and sockets to release
+            std::thread::sleep(std::time::Duration::from_millis(500));
+
+            // Relaunch Antigravity
+            Self::launch_antigravity(target_workspace)?;
+            Ok(true)
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let _ = std::process::Command::new("pkill")
+                .arg("-TERM")
+                .arg("-f")
+                .arg("antigravity")
+                .output();
+
+            let start = std::time::Instant::now();
+            while start.elapsed() < std::time::Duration::from_secs(5) {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if !Self::is_antigravity_running() {
+                    break;
+                }
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            Self::launch_antigravity(target_workspace)?;
+            Ok(true)
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/IM", "Antigravity.exe"])
+                .output();
+
+            let start = std::time::Instant::now();
+            while start.elapsed() < std::time::Duration::from_secs(5) {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if !Self::is_antigravity_running() {
+                    break;
+                }
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            Self::launch_antigravity(target_workspace)?;
+            Ok(true)
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
+            anyhow::bail!("Unsupported platform for restarting Antigravity");
+        }
     }
 }

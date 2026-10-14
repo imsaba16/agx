@@ -1,6 +1,6 @@
 [package]
 name = "agx"
-version = "1.0.0-rc.1"
+version = "1.0.0-rc.2"
 edition = "2021"
 authors = ["Antigravity Developers"]
 description = "agx: Antigravity eXtension — Enterprise context exchange, session diffing, zero-decompression search, and backup engine for Google Antigravity."
@@ -23,7 +23,7 @@ regex = "1.10"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 colored = "2.1"
-dirs = "5.0"
+dirs = "7.0"
 anyhow = "1.0"
 tempfile = "3.12"
 globset = "0.4"
@@ -35,6 +35,6 @@ comfy-table = "7.1"
 clap_complete = "4.5"
 sha2 = "0.10"
 similar = "2.6"
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.28"
 

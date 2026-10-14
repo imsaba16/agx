@@ -240,10 +240,7 @@ impl Database {
                     )
                 })
                 .or_else(|_| {
-                    chrono::DateTime::parse_from_str(
-                        &conv.last_modified_time,
-                        "%Y-%m-%d %H:%M:%S",
-                    )
+                    chrono::DateTime::parse_from_str(&conv.last_modified_time, "%Y-%m-%d %H:%M:%S")
                 })
                 .map(|dt| dt.timestamp_nanos_opt().unwrap_or(now_ns))
                 .unwrap_or(now_ns);
@@ -257,10 +254,11 @@ impl Database {
             };
 
             let _ = conn.execute(
-                "DELETE FROM conversations_fts WHERE conversation_id = ?1 AND chunk_index = -1",
+                "DELETE FROM conversations_fts WHERE conversation_id = ?1 AND chunk_index IN (-1, 0)",
                 params![conv.conversation_id],
             );
 
+            // 1. Chunk -1: Header metadata (title, workspace, project)
             let _ = conn.execute(
                 "INSERT INTO conversations_fts (
                     conversation_id, chunk_index, chunk_first_step, chunk_last_step,
@@ -281,6 +279,35 @@ impl Database {
                     display_title,
                     workspace_name,
                     project_name,
+                ],
+            );
+
+            // 2. Chunk 0: Initial interaction content (user prompt preview required by Antigravity project list)
+            let user_body = if !conv.preview.trim().is_empty() {
+                conv.preview.trim()
+            } else {
+                display_title
+            };
+
+            let _ = conn.execute(
+                "INSERT INTO conversations_fts (
+                    conversation_id, chunk_index, chunk_first_step, chunk_last_step,
+                    last_modified_time, step_count, last_step_created_at, archived,
+                    user_step_byte_offsets, agent_step_byte_offsets,
+                    title, workspace, project, user_body, agent_body
+                ) VALUES (
+                    ?1, 0, 0, 1,
+                    ?2, ?3, ?4, 0,
+                    '', '',
+                    '', '', '',
+                    ?5, ''
+                )",
+                params![
+                    conv.conversation_id,
+                    mod_time_ns,
+                    conv.step_count,
+                    mod_time_ns,
+                    user_body,
                 ],
             );
         }

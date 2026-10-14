@@ -52,7 +52,7 @@ Add the following Ruby formula file:
 class Agx < Formula
   desc "Context exchange, session diffing, search, and backup engine for Google Antigravity"
   homepage "https://github.com/imsaba16/agx"
-  version "1.0.0-rc.1"
+  version "1.0.0-rc.2"
   license "Apache-2.0"
 
   on_macos do
@@ -123,13 +123,13 @@ scoop install agx
 
 ```json
 {
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "description": "Context exchange, session diffing, search, and backup engine for Google Antigravity",
   "homepage": "https://github.com/imsaba16/agx",
   "license": "Apache-2.0",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.1/agx-windows-x86_64.zip",
+      "url": "https://github.com/imsaba16/agx/releases/download/v1.0.0-rc.2/agx-windows-x86_64.zip",
       "hash": "<SHA256_OF_WINDOWS_ZIP>"
     }
   },
@@ -163,7 +163,7 @@ Use Microsoft's official `wingetcreate` CLI tool:
 winget install wingetcreate
 
 # Generate manifest from release URL
-wingetcreate new https://github.com/<your-username>/antigravity-backup/releases/download/v1.0.0-rc.1/agx-windows-x86_64.zip
+wingetcreate new https://github.com/<your-username>/antigravity-backup/releases/download/v1.0.0-rc.2/agx-windows-x86_64.zip
 ```
 Follow the interactive prompts; `wingetcreate` automatically tests the manifest and creates a PR to `microsoft/winget-pkgs`.
 

@@ -14,7 +14,7 @@ body:
     attributes:
       label: agx Version
       description: What version of agx are you using? (Run `agx --version`)
-      placeholder: "e.g., agx 1.0.0-rc.1"
+      placeholder: "e.g., agx 1.0.0-rc.2"
     validations:
       required: true
 

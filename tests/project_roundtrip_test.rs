@@ -304,7 +304,7 @@ fn test_project_export_import_roundtrip() {
     assert!(target_ws.join(".agents").join("mcp_config.json").exists());
 
     // Verify conversations_fts contains rows with project and workspace
-    let conn = Connection::open(&target_paths.summaries_db()).unwrap();
+    let conn = Connection::open(target_paths.summaries_db()).unwrap();
     let mut stmt = conn
         .prepare("SELECT conversation_id, project, workspace, title FROM conversations_fts WHERE chunk_index = -1")
         .unwrap();
@@ -329,10 +329,26 @@ fn test_project_export_import_roundtrip() {
 
     // Verify ~/.gemini/config/projects/test-proj.json was restored and remapped
     let target_proj_file = target_paths.project_config_file("test-proj");
-    assert!(target_proj_file.exists(), "Target project config file must be created on import");
+    assert!(
+        target_proj_file.exists(),
+        "Target project config file must be created on import"
+    );
     let proj_content = fs::read_to_string(&target_proj_file).unwrap();
-    assert!(proj_content.contains(&target_uri), "Project config must contain remapped target_uri");
-    assert!(proj_content.contains("\"id\": \"test-proj\""));
+    assert!(
+        proj_content.contains(&target_uri),
+        "Project config must contain remapped target_uri"
+    );
+    // Verify agyhub_summaries_proto.pb was created and contains the summaries
+    let pb_path = target_paths.base_dir.join("agyhub_summaries_proto.pb");
+    assert!(
+        pb_path.exists(),
+        "agyhub_summaries_proto.pb must be created on import"
+    );
+    let pb_data = fs::read(&pb_path).unwrap();
+    let (entries, _) = agx::summaries_pb::SummariesProto::parse(&pb_data).unwrap();
+    assert_eq!(entries.len(), 2, "Must contain 2 conversation summaries");
+    assert!(entries.contains_key(conv1_id));
+    assert!(entries.contains_key(conv2_id));
 
     // 9. Verify safe-forking when destination already has colliding conversation IDs
     let (fork_count, _) =
