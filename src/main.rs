@@ -471,66 +471,31 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
         }
     }
 
-    let actions = [
-        ActionItem {
-            id: "explore",
-            title: "Split-Screen TUI Explorer",
-            desc: "Interactive session navigator & live preview",
-        },
-        ActionItem {
-            id: "export_active",
-            title: "Export active session",
-            desc: "Package current conversation into .agbundle",
-        },
-        ActionItem {
-            id: "export_project",
-            title: "Export entire project (.agproject)",
-            desc: "All conversations, brain files, skills & MCP",
-        },
-        ActionItem {
-            id: "browse_export",
-            title: "Browse & export past sessions",
-            desc: "Interactive session picker with search",
-        },
-        ActionItem {
-            id: "diff",
-            title: "Diff context against local/archive",
-            desc: "Visual side-by-side plan changes",
-        },
-        ActionItem {
-            id: "search",
-            title: "Search session contents",
-            desc: "Zero-decompression grep across archives",
-        },
-        ActionItem {
-            id: "extract",
-            title: "Extract specific artifact",
-            desc: "Extract plan, walkthrough, or transcript",
-        },
-        ActionItem {
-            id: "inspect",
-            title: "Inspect archive metadata",
-            desc: "View manifest, steps, and artifacts",
-        },
-        ActionItem {
-            id: "verify",
-            title: "Verify archive integrity",
-            desc: "Cryptographic SHA-256 audit & security check",
-        },
+    let primary_actions = [
         ActionItem {
             id: "import",
-            title: "Import archive into workspace",
-            desc: "Restore .agbundle or .agproject into Antigravity",
+            title: "Import Archive...",
+            desc: "Restore .agproject or .agbundle into Antigravity",
         },
         ActionItem {
-            id: "list",
-            title: "List workspace sessions",
-            desc: "View formatted conversation history table",
+            id: "export",
+            title: "Export...",
+            desc: "Package current project or conversations",
+        },
+        ActionItem {
+            id: "explore",
+            title: "Interactive TUI Explorer",
+            desc: "Split-screen session navigator & live preview",
         },
         ActionItem {
             id: "restart",
             title: "Restart Antigravity",
-            desc: "Reload projects, conversations, and language server",
+            desc: "Reload projects, conversations & language server",
+        },
+        ActionItem {
+            id: "tools",
+            title: "More Tools & Utilities...",
+            desc: "Diff, Search, Extract, Inspect & Verify",
         },
         ActionItem {
             id: "exit",
@@ -540,9 +505,9 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
     ];
 
     loop {
-        let selection = match inquire::Select::new("Select an action:", actions.iter().collect())
+        let selection = match inquire::Select::new("Select an action:", primary_actions.iter().collect())
             .with_render_config(render_config)
-            .with_page_size(12)
+            .with_page_size(8)
             .prompt()
         {
             Ok(s) => s.id,
@@ -550,134 +515,6 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
         };
 
         match selection {
-            "explore" => {
-                let _ = agx::explorer::run_explorer(paths);
-            }
-            "export_active" => {
-                let compact_prompt = inquire::Select::new(
-                    "Select export mode:",
-                    vec![
-                        "Compact Mode  (Fast, lightweight, skips heavy raw step logs & media)",
-                        "Full Fidelity (Complete raw step logs and heavy media)",
-                    ],
-                )
-                .with_render_config(render_config)
-                .prompt();
-
-                match compact_prompt {
-                    Ok(choice) => {
-                        let is_compact = choice.starts_with("Compact");
-                        let _ =
-                            handle_export(paths, None, None, None, true, is_compact, false, None);
-                    }
-                    _ => continue,
-                }
-            }
-            "export_project" => {
-                let compact_prompt = inquire::Select::new(
-                    "Select project export mode:",
-                    vec![
-                        "Full Fidelity (All conversations, complete logs, skills & MCP)",
-                        "Compact Mode  (Stripped raw step logs across all sessions)",
-                    ],
-                )
-                .with_render_config(render_config)
-                .prompt();
-
-                match compact_prompt {
-                    Ok(choice) => {
-                        let is_compact = choice.starts_with("Compact");
-                        let _ = handle_project_export(
-                            paths, None, None, is_compact, true, true, true, None,
-                        );
-                    }
-                    _ => continue,
-                }
-            }
-            "browse_export" => {
-                let _ = handle_export(paths, None, None, None, true, false, true, None);
-            }
-            "diff" => {
-                if let Ok(Some(archive_path)) =
-                    agx::ui::select_archive_file("Select archive to compare:")
-                {
-                    let _ =
-                        agx::diff::DiffEngine::diff_with_local(&archive_path, &cwd, paths, None);
-                }
-            }
-            "search" => {
-                let query_ans = inquire::Text::new("Enter search query or keyword:")
-                    .with_render_config(render_config)
-                    .prompt();
-                if let Ok(query) = query_ans {
-                    if !query.trim().is_empty() {
-                        let mut hits =
-                            agx::search::SearchEngine::search_archives(query.trim(), &cwd, false)?;
-                        let local_hits =
-                            agx::search::SearchEngine::search_local(query.trim(), paths, false)?;
-                        hits.extend(local_hits);
-                        agx::search::SearchEngine::print_hits(query.trim(), &hits);
-                    }
-                }
-            }
-            "extract" => {
-                if let Ok(Some(archive_path)) =
-                    agx::ui::select_archive_file("Select archive to extract from:")
-                {
-                    let pattern_choice = inquire::Select::new(
-                        "Select file to extract:",
-                        vec![
-                            "Implementation Plan (implementation_plan.md)",
-                            "Walkthrough (walkthrough.md)",
-                            "Transcript (transcript.jsonl)",
-                            "Manifest (manifest.json)",
-                            "Extract all files",
-                        ],
-                    )
-                    .with_render_config(render_config)
-                    .prompt();
-
-                    let pattern = match pattern_choice {
-                        Ok("Implementation Plan (implementation_plan.md)") => Some("plan"),
-                        Ok("Walkthrough (walkthrough.md)") => Some("walkthrough"),
-                        Ok("Transcript (transcript.jsonl)") => Some("transcript"),
-                        Ok("Manifest (manifest.json)") => Some("manifest"),
-                        _ => None,
-                    };
-
-                    let extracted = agx::extract::Extractor::extract(&archive_path, pattern, None)?;
-                    println!(
-                        "\n{}",
-                        format!(
-                            "✔ Successfully extracted {} file(s) into current folder:",
-                            extracted.len()
-                        )
-                        .green()
-                        .bold()
-                    );
-                    for p in extracted {
-                        println!("  - {:?}", p);
-                    }
-                }
-            }
-            "inspect" => {
-                if let Ok(Some(archive_path)) =
-                    agx::ui::select_archive_file("Select archive to inspect:")
-                {
-                    if is_project_archive(&archive_path) {
-                        let _ = handle_project_info(&archive_path, false);
-                    } else {
-                        let _ = handle_info(&archive_path, false);
-                    }
-                }
-            }
-            "verify" => {
-                if let Ok(Some(archive_path)) =
-                    agx::ui::select_archive_file("Select archive to verify:")
-                {
-                    let _ = handle_verify(&archive_path, false);
-                }
-            }
             "import" => {
                 if let Ok(Some(archive_path)) =
                     agx::ui::select_archive_file("Select archive to import:")
@@ -745,11 +582,222 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                     }
                 }
             }
-            "list" => {
-                let _ = handle_list(paths, None, 20, false);
+            "export" => {
+                let export_actions = [
+                    ActionItem {
+                        id: "export_project",
+                        title: "Export entire project (.agproject)",
+                        desc: "All conversations, brain files, skills & MCP",
+                    },
+                    ActionItem {
+                        id: "export_active",
+                        title: "Export active conversation (.agbundle)",
+                        desc: "Package latest session for this workspace",
+                    },
+                    ActionItem {
+                        id: "browse_export",
+                        title: "Browse & export past sessions",
+                        desc: "Interactive session picker with search",
+                    },
+                    ActionItem {
+                        id: "back",
+                        title: "← Back to Main Menu",
+                        desc: "",
+                    },
+                ];
+
+                let export_sel = match inquire::Select::new("Select export type:", export_actions.iter().collect())
+                    .with_render_config(render_config)
+                    .prompt()
+                {
+                    Ok(s) => s.id,
+                    Err(_) => continue,
+                };
+
+                match export_sel {
+                    "export_project" => {
+                        let compact_prompt = inquire::Select::new(
+                            "Select project export mode:",
+                            vec![
+                                "Full Fidelity (All conversations, complete logs, skills & MCP)",
+                                "Compact Mode  (Stripped raw step logs across all sessions)",
+                            ],
+                        )
+                        .with_render_config(render_config)
+                        .prompt();
+
+                        if let Ok(choice) = compact_prompt {
+                            let is_compact = choice.starts_with("Compact");
+                            let _ = handle_project_export(
+                                paths, None, None, is_compact, true, true, true, None,
+                            );
+                        }
+                    }
+                    "export_active" => {
+                        let compact_prompt = inquire::Select::new(
+                            "Select export mode:",
+                            vec![
+                                "Compact Mode  (Fast, lightweight, skips heavy raw step logs & media)",
+                                "Full Fidelity (Complete raw step logs and heavy media)",
+                            ],
+                        )
+                        .with_render_config(render_config)
+                        .prompt();
+
+                        if let Ok(choice) = compact_prompt {
+                            let is_compact = choice.starts_with("Compact");
+                            let _ = handle_export(
+                                paths, None, None, None, true, is_compact, false, None,
+                            );
+                        }
+                    }
+                    "browse_export" => {
+                        let _ = handle_export(paths, None, None, None, true, false, true, None);
+                    }
+                    _ => continue,
+                }
+            }
+            "explore" => {
+                let _ = agx::explorer::run_explorer(paths);
             }
             "restart" => {
                 let _ = handle_restart(Some(cwd.clone()));
+            }
+            "tools" => {
+                let tool_actions = [
+                    ActionItem {
+                        id: "diff",
+                        title: "Diff context against local/archive",
+                        desc: "Visual side-by-side plan changes",
+                    },
+                    ActionItem {
+                        id: "search",
+                        title: "Search session contents",
+                        desc: "Zero-decompression grep across archives",
+                    },
+                    ActionItem {
+                        id: "extract",
+                        title: "Extract specific artifact",
+                        desc: "Extract plan, walkthrough, or transcript",
+                    },
+                    ActionItem {
+                        id: "inspect",
+                        title: "Inspect archive metadata",
+                        desc: "View manifest, steps, and artifacts",
+                    },
+                    ActionItem {
+                        id: "verify",
+                        title: "Verify archive integrity",
+                        desc: "Cryptographic SHA-256 audit & security check",
+                    },
+                    ActionItem {
+                        id: "list",
+                        title: "List workspace sessions",
+                        desc: "View formatted conversation history table",
+                    },
+                    ActionItem {
+                        id: "back",
+                        title: "← Back to Main Menu",
+                        desc: "",
+                    },
+                ];
+
+                let tool_sel = match inquire::Select::new("Select utility:", tool_actions.iter().collect())
+                    .with_render_config(render_config)
+                    .with_page_size(10)
+                    .prompt()
+                {
+                    Ok(s) => s.id,
+                    Err(_) => continue,
+                };
+
+                match tool_sel {
+                    "diff" => {
+                        if let Ok(Some(archive_path)) =
+                            agx::ui::select_archive_file("Select archive to compare:")
+                        {
+                            let _ =
+                                agx::diff::DiffEngine::diff_with_local(&archive_path, &cwd, paths, None);
+                        }
+                    }
+                    "search" => {
+                        let query_ans = inquire::Text::new("Enter search query or keyword:")
+                            .with_render_config(render_config)
+                            .prompt();
+                        if let Ok(query) = query_ans {
+                            if !query.trim().is_empty() {
+                                let mut hits =
+                                    agx::search::SearchEngine::search_archives(query.trim(), &cwd, false)?;
+                                let local_hits =
+                                    agx::search::SearchEngine::search_local(query.trim(), paths, false)?;
+                                hits.extend(local_hits);
+                                agx::search::SearchEngine::print_hits(query.trim(), &hits);
+                            }
+                        }
+                    }
+                    "extract" => {
+                        if let Ok(Some(archive_path)) =
+                            agx::ui::select_archive_file("Select archive to extract from:")
+                        {
+                            let pattern_choice = inquire::Select::new(
+                                "Select file to extract:",
+                                vec![
+                                    "Implementation Plan (implementation_plan.md)",
+                                    "Walkthrough (walkthrough.md)",
+                                    "Transcript (transcript.jsonl)",
+                                    "Manifest (manifest.json)",
+                                    "Extract all files",
+                                ],
+                            )
+                            .with_render_config(render_config)
+                            .prompt();
+
+                            let pattern = match pattern_choice {
+                                Ok("Implementation Plan (implementation_plan.md)") => Some("plan"),
+                                Ok("Walkthrough (walkthrough.md)") => Some("walkthrough"),
+                                Ok("Transcript (transcript.jsonl)") => Some("transcript"),
+                                Ok("Manifest (manifest.json)") => Some("manifest"),
+                                _ => None,
+                            };
+
+                            let extracted = agx::extract::Extractor::extract(&archive_path, pattern, None)?;
+                            println!(
+                                "\n{}",
+                                format!(
+                                    "✔ Successfully extracted {} file(s) into current folder:",
+                                    extracted.len()
+                                )
+                                .green()
+                                .bold()
+                            );
+                            for p in extracted {
+                                println!("  - {:?}", p);
+                            }
+                        }
+                    }
+                    "inspect" => {
+                        if let Ok(Some(archive_path)) =
+                            agx::ui::select_archive_file("Select archive to inspect:")
+                        {
+                            if is_project_archive(&archive_path) {
+                                let _ = handle_project_info(&archive_path, false);
+                            } else {
+                                let _ = handle_info(&archive_path, false);
+                            }
+                        }
+                    }
+                    "verify" => {
+                        if let Ok(Some(archive_path)) =
+                            agx::ui::select_archive_file("Select archive to verify:")
+                        {
+                            let _ = handle_verify(&archive_path, false);
+                        }
+                    }
+                    "list" => {
+                        let _ = handle_list(paths, None, 20, false);
+                    }
+                    _ => continue,
+                }
             }
             "exit" => break,
             _ => break,
