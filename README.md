@@ -298,7 +298,7 @@ agx completion fish > ~/.config/fish/completions/agx.fish
 - *"Export this conversation as a compact archive for my teammate"*
 - *"Inspect and verify the bundle at ./backup.agbundle"*
 
-Skill manifest: [`.agents/skills/agx/SKILL.md`](.agents/skills/agx/SKILL.md).
+Skill manifest: [`docs/SKILL.md`](docs/SKILL.md) (workspace: [`.agents/skills/agx/SKILL.md`](.agents/skills/agx/SKILL.md)).
 
 ---
 
@@ -322,6 +322,7 @@ Yes. The `agx search`, `agx cat`, and `agx extract` commands read directly from 
 
 - [CLI Reference Guide](docs/cli-reference.md): Detailed parameter, flag, and option breakdown for all subcommands.
 - [Architecture & Format Specification](docs/architecture.md): Internal design, manifest schemas, and data structures.
+- [Native Agent Skill Specification](docs/SKILL.md): Antigravity agent runbook, slash command triggers, and conversational workflows.
 - [Packaging & Distribution Guide](docs/packaging-and-distribution.md): Setup instructions for Homebrew, Scoop, WinGet, and multi-platform binary releases.
 - [Security Policy](SECURITY.md): Vulnerability reporting procedures and mitigation strategies.
 - [Contributing Guide](CONTRIBUTING.md): Development environment setup, linting, and testing workflows.
