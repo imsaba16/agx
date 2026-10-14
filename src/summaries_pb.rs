@@ -9,6 +9,8 @@ const WIRE_FIXED64: u8 = 1;
 const WIRE_LEN_DELIM: u8 = 2;
 const WIRE_FIXED32: u8 = 5;
 
+pub type ParsedSummaries = (HashMap<String, Vec<u8>>, Vec<Vec<u8>>);
+
 pub struct SummariesProto;
 
 impl SummariesProto {
@@ -57,7 +59,7 @@ impl SummariesProto {
 
     /// Parse an existing protobuf summaries file into a map of `conversation_id -> raw_summary`,
     /// preserving any other non-summaries fields verbatim.
-    pub fn parse(data: &[u8]) -> Result<(HashMap<String, Vec<u8>>, Vec<Vec<u8>>)> {
+    pub fn parse(data: &[u8]) -> Result<ParsedSummaries> {
         let mut entries = HashMap::new();
         let mut other_fields = Vec::new();
         let mut offset = 0;
@@ -217,14 +219,10 @@ impl SummariesProto {
     }
 
     /// Upsert one or more conversation summaries into a `.pb` file atomically.
-    pub fn upsert_to_file(
-        pb_path: &Path,
-        items: &[(String, Vec<u8>)],
-    ) -> Result<()> {
+    pub fn upsert_to_file(pb_path: &Path, items: &[(String, Vec<u8>)]) -> Result<()> {
         let (mut entries, other_fields) = if pb_path.exists() {
-            let data = fs::read(pb_path).with_context(|| {
-                format!("Failed to read protobuf file: {}", pb_path.display())
-            })?;
+            let data = fs::read(pb_path)
+                .with_context(|| format!("Failed to read protobuf file: {}", pb_path.display()))?;
             Self::parse(&data).unwrap_or_else(|_| (HashMap::new(), Vec::new()))
         } else {
             (HashMap::new(), Vec::new())

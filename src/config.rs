@@ -62,7 +62,8 @@ impl AntigravityPaths {
     }
 
     pub fn project_config_file(&self, project_id: &str) -> PathBuf {
-        self.projects_config_dir().join(format!("{}.json", project_id))
+        self.projects_config_dir()
+            .join(format!("{}.json", project_id))
     }
 
     pub fn conversation_db(&self, conversation_id: &str) -> PathBuf {
@@ -83,7 +84,11 @@ impl AntigravityPaths {
         let direct_candidates = vec![
             dirs::data_dir().map(|d| d.join("Antigravity").join("app_storage.json")),
             dirs::config_dir().map(|d| d.join("Antigravity").join("app_storage.json")),
-            dirs::home_dir().map(|h| h.join(".config").join("Antigravity").join("app_storage.json")),
+            dirs::home_dir().map(|h| {
+                h.join(".config")
+                    .join("Antigravity")
+                    .join("app_storage.json")
+            }),
             dirs::home_dir().map(|h| {
                 h.join("Library")
                     .join("Application Support")
@@ -99,9 +104,8 @@ impl AntigravityPaths {
         }
 
         #[cfg(target_os = "macos")]
-        return dirs::home_dir().map(|h| {
-            h.join("Library/Application Support/Antigravity/app_storage.json")
-        });
+        return dirs::home_dir()
+            .map(|h| h.join("Library/Application Support/Antigravity/app_storage.json"));
         #[cfg(target_os = "windows")]
         return dirs::config_dir().map(|d| d.join("Antigravity").join("app_storage.json"));
         #[cfg(target_os = "linux")]
