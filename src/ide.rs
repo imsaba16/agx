@@ -1,6 +1,10 @@
+#[cfg(target_os = "windows")]
+use anyhow::Context;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
 
 pub struct IdeStorage;
 
@@ -203,8 +207,8 @@ impl IdeStorage {
                 .args(["/FI", "IMAGENAME eq Antigravity.exe"])
                 .output()
             {
-                let text = String::from_utf8_lossy(&output.stdout);
-                return text.contains("Antigravity.exe");
+                let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
+                return text.contains("antigravity.exe");
             }
             false
         }
@@ -213,6 +217,79 @@ impl IdeStorage {
         {
             false
         }
+    }
+
+    /// Discovers the path to the Antigravity executable on Windows across standard install locations.
+    #[cfg(target_os = "windows")]
+    pub fn find_windows_antigravity_exe() -> PathBuf {
+        let mut candidates = Vec::new();
+
+        if let Some(local) = dirs::data_local_dir() {
+            candidates.push(
+                local
+                    .join("Programs")
+                    .join("antigravity")
+                    .join("Antigravity.exe"),
+            );
+            candidates.push(
+                local
+                    .join("Programs")
+                    .join("Antigravity")
+                    .join("Antigravity.exe"),
+            );
+            candidates.push(local.join("antigravity").join("Antigravity.exe"));
+            candidates.push(local.join("Antigravity").join("Antigravity.exe"));
+        }
+
+        if let Some(local_appdata) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+            candidates.push(
+                local_appdata
+                    .join("Programs")
+                    .join("antigravity")
+                    .join("Antigravity.exe"),
+            );
+            candidates.push(
+                local_appdata
+                    .join("Programs")
+                    .join("Antigravity")
+                    .join("Antigravity.exe"),
+            );
+            candidates.push(local_appdata.join("antigravity").join("Antigravity.exe"));
+            candidates.push(local_appdata.join("Antigravity").join("Antigravity.exe"));
+        }
+
+        if let Some(prog_files) = std::env::var_os("ProgramFiles").map(PathBuf::from) {
+            candidates.push(prog_files.join("Antigravity").join("Antigravity.exe"));
+            candidates.push(prog_files.join("antigravity").join("Antigravity.exe"));
+        }
+
+        if let Some(prog_files_x86) = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from) {
+            candidates.push(prog_files_x86.join("Antigravity").join("Antigravity.exe"));
+            candidates.push(prog_files_x86.join("antigravity").join("Antigravity.exe"));
+        }
+
+        for candidate in candidates {
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+
+        // Try where.exe
+        for name in ["Antigravity.exe", "antigravity.exe", "antigravity"] {
+            if let Ok(output) = std::process::Command::new("where.exe").arg(name).output() {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if let Some(first_line) = stdout.lines().next() {
+                        let path = PathBuf::from(first_line.trim());
+                        if path.exists() {
+                            return path;
+                        }
+                    }
+                }
+            }
+        }
+
+        PathBuf::from("Antigravity.exe")
     }
 
     /// Launches Antigravity, optionally focusing or opening the specified workspace directory.
@@ -243,13 +320,31 @@ impl IdeStorage {
 
         #[cfg(target_os = "windows")]
         {
-            let mut cmd = std::process::Command::new("cmd");
-            cmd.args(["/c", "start", "", "Antigravity.exe"]);
+            use std::os::windows::process::CommandExt;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+
+            let exe = Self::find_windows_antigravity_exe();
+            let mut cmd = std::process::Command::new(&exe);
             if let Some(ws) = target_workspace {
                 cmd.arg(ws.as_os_str());
             }
-            cmd.spawn()?;
-            Ok(())
+            cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+            match cmd.spawn() {
+                Ok(_) => Ok(()),
+                Err(_) => {
+                    let mut fallback = std::process::Command::new("cmd");
+                    fallback.args(["/c", "start", ""]);
+                    fallback.arg(&exe);
+                    if let Some(ws) = target_workspace {
+                        fallback.arg(ws.as_os_str());
+                    }
+                    fallback.spawn().with_context(|| {
+                        format!("Failed to launch Antigravity at {}", exe.display())
+                    })?;
+                    Ok(())
+                }
+            }
         }
 
         #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
@@ -334,6 +429,13 @@ impl IdeStorage {
                 if !Self::is_antigravity_running() {
                     break;
                 }
+            }
+
+            if Self::is_antigravity_running() {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/IM", "Antigravity.exe"])
+                    .output();
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
 
             std::thread::sleep(std::time::Duration::from_millis(500));
