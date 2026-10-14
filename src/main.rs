@@ -18,7 +18,7 @@ use agx::project_importer::ProjectImporter;
 #[derive(Parser, Debug)]
 #[command(name = "agx")]
 #[command(author = "Antigravity Developers")]
-#[command(version = "1.0.0-rc.2")]
+#[command(version = "1.0.0-rc.3")]
 #[command(about = "agx: Antigravity eXtension — Context exchange, session diffing, search, and backup engine for Google Antigravity", long_about = None)]
 struct Cli {
     /// Custom path to Antigravity directory (defaults to ~/.gemini/antigravity)
@@ -628,9 +628,13 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
 
                         if let Ok(choice) = compact_prompt {
                             let is_compact = choice.starts_with("Compact");
-                            let _ = handle_project_export(
+                            if let Err(e) = handle_project_export(
                                 paths, None, None, is_compact, true, true, true, None,
-                            );
+                            ) {
+                                eprintln!("\n{}", format!("❌ Export error: {}", e).bold().red());
+                            }
+                            let _ = inquire::Text::new("Press Enter to return to main menu...")
+                                .prompt();
                         }
                     }
                     "export_active" => {
@@ -646,13 +650,23 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
 
                         if let Ok(choice) = compact_prompt {
                             let is_compact = choice.starts_with("Compact");
-                            let _ = handle_export(
+                            if let Err(e) = handle_export(
                                 paths, None, None, None, true, is_compact, false, None,
-                            );
+                            ) {
+                                eprintln!("\n{}", format!("❌ Export error: {}", e).bold().red());
+                            }
+                            let _ = inquire::Text::new("Press Enter to return to main menu...")
+                                .prompt();
                         }
                     }
                     "browse_export" => {
-                        let _ = handle_export(paths, None, None, None, true, false, true, None);
+                        if let Err(e) =
+                            handle_export(paths, None, None, None, true, false, true, None)
+                        {
+                            eprintln!("\n{}", format!("❌ Export error: {}", e).bold().red());
+                        }
+                        let _ =
+                            inquire::Text::new("Press Enter to return to main menu...").prompt();
                     }
                     _ => continue,
                 }
@@ -1457,18 +1471,79 @@ fn handle_project_export(
     sanitize: bool,
     ignore_file: Option<PathBuf>,
 ) -> Result<()> {
-    let ws_root = workspace
+    let mut ws_root = workspace
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("."));
 
     let db = Database::new(&paths.summaries_db());
-    let conversations = db.find_conversations_for_workspace(&ws_root)?;
+    let mut conversations = db.find_conversations_for_workspace(&ws_root)?;
 
     if conversations.is_empty() {
-        anyhow::bail!(
-            "No conversations found associated with workspace {:?}",
-            ws_root
-        );
+        if interactive {
+            let all = db.list_conversations()?;
+            if all.is_empty() {
+                anyhow::bail!("No conversations found in Antigravity database.");
+            }
+
+            println!(
+                "{}",
+                format!(
+                    "No conversations found for current directory ({:?}).",
+                    ws_root
+                )
+                .yellow()
+            );
+
+            let mut ws_groups: std::collections::BTreeMap<
+                String,
+                Vec<agx::models::ConversationSummary>,
+            > = std::collections::BTreeMap::new();
+            for c in all {
+                let ws_label =
+                    if let Ok(uris) = serde_json::from_str::<Vec<String>>(&c.workspace_uris) {
+                        if let Some(first_uri) = uris.first() {
+                            let path_str = first_uri
+                                .trim_start_matches("file:///")
+                                .trim_start_matches("file://");
+                            path_str.to_string()
+                        } else if !c.project_id.trim().is_empty() {
+                            c.project_id.clone()
+                        } else {
+                            "Unknown Project".to_string()
+                        }
+                    } else if !c.project_id.trim().is_empty() {
+                        c.project_id.clone()
+                    } else {
+                        "Unknown Project".to_string()
+                    };
+                ws_groups.entry(ws_label).or_default().push(c);
+            }
+
+            let ws_choices: Vec<String> = ws_groups
+                .iter()
+                .map(|(label, convs)| format!("{} ({} recorded session(s))", label, convs.len()))
+                .collect();
+
+            let selection = inquire::Select::new("Select project/workspace to export:", ws_choices)
+                .with_render_config(agx::ui::get_render_config())
+                .prompt()
+                .map_err(|e| anyhow::anyhow!("Workspace selection cancelled: {}", e))?;
+
+            if let Some((label, convs)) = ws_groups
+                .into_iter()
+                .find(|(lbl, _)| selection.starts_with(lbl))
+            {
+                ws_root = PathBuf::from(label);
+                conversations = convs;
+            } else {
+                anyhow::bail!("Selected workspace not found.");
+            }
+        } else {
+            anyhow::bail!(
+                "No conversations found associated with workspace {:?}",
+                ws_root
+            );
+        }
     }
 
     let session_ids = if interactive {

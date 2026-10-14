@@ -41,7 +41,7 @@ A self-contained ZIP archive packaging a single conversation trajectory and its 
   "format_version": "1.0",
   "bundle_type": "conversation",
   "created_at": "2026-10-13T13:16:31.482544Z",
-  "generator": "agx v1.0.0-rc.2",
+  "generator": "agx v1.0.0-rc.3",
   "conversation": {
     "id": "dd1457fe-2440-495a-a27f-d6f891bad9ff",
     "title": "Project Analysis and Summary",
