@@ -276,6 +276,8 @@ impl ProjectImporter {
             let _ = crate::ide::IdeStorage::register_project(&storage_path, &target_project_id);
         }
 
+        let mut pb_items: Vec<(String, Vec<u8>)> = Vec::new();
+
         if paths.summaries_db().exists() {
             let db = Database::new(&paths.summaries_db());
 
@@ -304,12 +306,64 @@ impl ProjectImporter {
                 updated.workspace_uris =
                     PathRemapper::remap_workspace_uris_import(&updated.workspace_uris, target_ws);
 
+                // Remap project_id / conversation_id inside raw_summary if present, or synthesize
+                let raw_bytes = if let Some(mut raw) = updated.raw_summary.clone() {
+                    if !conv.project_id.trim().is_empty()
+                        && conv.project_id.len() == target_project_id.len()
+                        && conv.project_id != target_project_id
+                    {
+                        raw = replace_bytes(
+                            &raw,
+                            conv.project_id.as_bytes(),
+                            target_project_id.as_bytes(),
+                        );
+                    }
+                    if *orig_id != final_id && orig_id.len() == final_id.len() {
+                        raw = replace_bytes(&raw, orig_id.as_bytes(), final_id.as_bytes());
+                    }
+                    updated.raw_summary = Some(raw.clone());
+                    raw
+                } else {
+                    let syn = crate::summaries_pb::SummariesProto::synthesize_summary(
+                        &updated.title,
+                        &final_id,
+                        &target_project_id,
+                        &ws_uri,
+                    );
+                    updated.raw_summary = Some(syn.clone());
+                    syn
+                };
+
+                pb_items.push((final_id.clone(), raw_bytes));
+
                 db.upsert_conversation_with_fts(&updated, &project_name, &ws_name)?;
             }
         }
 
+        // Sync to agyhub_summaries_proto.pb so Antigravity Language Server loads conversations into Redux
+        if !pb_items.is_empty() {
+            let _ = crate::summaries_pb::SummariesProto::sync_all_pb_targets(paths, &pb_items);
+        }
+
         Ok((manifest.conversations.len(), manifest))
     }
+}
+
+fn replace_bytes(data: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
+    if from.is_empty() || from.len() != to.len() {
+        return data.to_vec();
+    }
+    let mut result = data.to_vec();
+    let mut i = 0;
+    while i + from.len() <= result.len() {
+        if &result[i..i + from.len()] == from {
+            result[i..i + from.len()].copy_from_slice(to);
+            i += from.len();
+        } else {
+            i += 1;
+        }
+    }
+    result
 }
 
 fn is_text_file(path: &Path) -> bool {
