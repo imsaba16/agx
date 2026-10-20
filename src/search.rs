@@ -161,6 +161,84 @@ impl SearchEngine {
         Ok(hits)
     }
 
+    /// Search across OpenAI Codex CLI threads and rollouts
+    pub fn search_codex(query: &str, case_sensitive: bool) -> Result<Vec<SearchHit>> {
+        let mut hits = Vec::new();
+        let codex_paths = match crate::codex::CodexPaths::discover() {
+            Ok(p) => p,
+            Err(_) => return Ok(hits),
+        };
+
+        let db_path = match codex_paths.state_db() {
+            Some(p) => p,
+            None => return Ok(hits),
+        };
+
+        let db = crate::codex::CodexDb::new(&db_path);
+        let threads = db.list_threads(None).unwrap_or_default();
+
+        let q_pattern = if case_sensitive {
+            query.to_string()
+        } else {
+            query.to_lowercase()
+        };
+
+        for thread in threads {
+            let short_id = if thread.id.len() > 8 {
+                &thread.id[..8]
+            } else {
+                &thread.id
+            };
+            let location_str = format!("codex: {} [{}]", thread.title, short_id);
+
+            // 1. Search first_user_message
+            for (idx, line) in thread.first_user_message.lines().enumerate() {
+                let matches = if case_sensitive {
+                    line.contains(&q_pattern)
+                } else {
+                    line.to_lowercase().contains(&q_pattern)
+                };
+
+                if matches {
+                    hits.push(SearchHit {
+                        location: location_str.clone(),
+                        inner_file: "prompt".to_string(),
+                        line_number: idx + 1,
+                        line_content: line.trim().to_string(),
+                    });
+                }
+            }
+
+            // 2. Search rollout file if available
+            let rollout = Path::new(&thread.rollout_path);
+            if rollout.exists() && rollout.is_file() {
+                if let Ok(file) = fs::File::open(rollout) {
+                    let reader = BufReader::new(file);
+                    for (idx, line_res) in reader.lines().enumerate() {
+                        if let Ok(line) = line_res {
+                            let matches = if case_sensitive {
+                                line.contains(&q_pattern)
+                            } else {
+                                line.to_lowercase().contains(&q_pattern)
+                            };
+
+                            if matches {
+                                hits.push(SearchHit {
+                                    location: location_str.clone(),
+                                    inner_file: "rollout.jsonl".to_string(),
+                                    line_number: idx + 1,
+                                    line_content: line.trim().to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(hits)
+    }
+
     /// Renders search hits with highlighted terms
     pub fn print_hits(query: &str, hits: &[SearchHit]) {
         println!();

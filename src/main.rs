@@ -44,6 +44,10 @@ enum Commands {
         /// Output results in JSON format
         #[arg(long)]
         json: bool,
+
+        /// Include sessions from both Antigravity and OpenAI Codex CLI
+        #[arg(long, visible_alias = "all")]
+        all_agents: bool,
     },
 
     /// Export a single conversation and its project brain into a portable .agbundle archive
@@ -193,11 +197,80 @@ enum Commands {
         action: ProjectCommands,
     },
 
+    /// Interoperability with OpenAI Codex CLI (doctor, list, sync skills & MCP)
+    Codex {
+        #[command(subcommand)]
+        action: CodexCliCommands,
+    },
+
+    /// Seamlessly hand off session context between Antigravity and OpenAI Codex CLI
+    Handoff {
+        /// Hand off from a Codex thread into Antigravity session
+        #[arg(long)]
+        from_codex: Option<String>,
+
+        /// Hand off active/specified Antigravity conversation to Codex CLI
+        #[arg(long)]
+        to_codex: bool,
+
+        /// Antigravity conversation ID to hand off (defaults to latest in current workspace)
+        #[arg(short, long)]
+        id: Option<String>,
+
+        /// Print the synthesized handoff context prompt without launching Codex
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Generate shell autocompletion scripts (bash, zsh, fish, powershell, elvish)
     Completion {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: clap_complete::Shell,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum CodexCliCommands {
+    /// Diagnose local Codex installation, config, databases, skills, and binary
+    Doctor,
+
+    /// List Codex threads and sessions
+    List {
+        /// Filter threads matching a workspace directory substring
+        #[arg(short, long)]
+        workspace: Option<String>,
+
+        /// Maximum number of threads to display
+        #[arg(short, long, default_value_t = 15)]
+        limit: usize,
+
+        /// Output results in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Synchronize skills and MCP server configurations between Antigravity and Codex
+    Sync {
+        /// Synchronize skills (.agents/skills <-> ~/.codex/skills)
+        #[arg(long)]
+        skills: bool,
+
+        /// Synchronize MCP server configurations (mcp_config.json <-> ~/.codex/config.toml)
+        #[arg(long)]
+        mcp: bool,
+
+        /// Use symlinks for skills synchronization instead of copying
+        #[arg(long, default_value_t = true)]
+        symlink: bool,
+
+        /// Sync direction: from Codex to Antigravity (default is Antigravity to Codex)
+        #[arg(long)]
+        to_antigravity: bool,
+
+        /// Overwrite conflicting destinations
+        #[arg(long)]
+        overwrite: bool,
     },
 }
 
@@ -280,8 +353,9 @@ fn main() -> Result<()> {
             workspace,
             limit,
             json,
+            all_agents,
         }) => {
-            handle_list(&paths, workspace, limit, json)?;
+            handle_list(&paths, workspace, limit, json, all_agents)?;
         }
         Some(Commands::Export {
             id,
@@ -356,6 +430,10 @@ fn main() -> Result<()> {
                 let local_hits =
                     agx::search::SearchEngine::search_local(&query, &paths, case_sensitive)?;
                 total_hits.extend(local_hits);
+
+                if let Ok(codex_hits) = agx::search::SearchEngine::search_codex(&query, case_sensitive) {
+                    total_hits.extend(codex_hits);
+                }
             }
 
             agx::search::SearchEngine::print_hits(&query, &total_hits);
@@ -428,6 +506,35 @@ fn main() -> Result<()> {
                     restart,
                 )?;
             }
+        },
+        Some(Commands::Codex { action }) => match action {
+            CodexCliCommands::Doctor => {
+                handle_codex_doctor()?;
+            }
+            CodexCliCommands::List {
+                workspace,
+                limit,
+                json,
+            } => {
+                handle_codex_list(workspace, limit, json)?;
+            }
+            CodexCliCommands::Sync {
+                skills,
+                mcp,
+                symlink,
+                to_antigravity,
+                overwrite,
+            } => {
+                handle_codex_sync(&paths, skills, mcp, symlink, to_antigravity, overwrite)?;
+            }
+        },
+        Some(Commands::Handoff {
+            from_codex,
+            to_codex,
+            id,
+            dry_run,
+        }) => {
+            handle_handoff(&paths, from_codex, to_codex, id, dry_run)?;
         },
         Some(Commands::Completion { shell }) => {
             let mut cmd = Cli::command();
@@ -820,7 +927,7 @@ fn run_interactive_dashboard(paths: &AntigravityPaths) -> Result<()> {
                         }
                     }
                     "list" => {
-                        let _ = handle_list(paths, None, 20, false);
+                        let _ = handle_list(paths, None, 20, false, false);
                     }
                     _ => continue,
                 }
@@ -840,21 +947,32 @@ fn handle_list(
     workspace_filter: Option<String>,
     limit: usize,
     json: bool,
+    all_agents: bool,
 ) -> Result<()> {
-    if !paths.summaries_db().exists() {
-        eprintln!(
-            "{}",
-            format!(
-                "Error: Antigravity database not found at {:?}",
-                paths.summaries_db()
-            )
-            .red()
-        );
-        std::process::exit(1);
+    let mut conversations = Vec::new();
+
+    if paths.summaries_db().exists() {
+        let db = Database::new(&paths.summaries_db());
+        if let Ok(convs) = db.list_conversations() {
+            conversations.extend(convs);
+        }
     }
 
-    let db = Database::new(&paths.summaries_db());
-    let conversations = db.list_conversations()?;
+    if all_agents {
+        if let Ok(codex_paths) = agx::codex::CodexPaths::discover() {
+            if let Some(db_path) = codex_paths.state_db() {
+                let codex_db = agx::codex::CodexDb::new(&db_path);
+                if let Ok(threads) = codex_db.list_threads(workspace_filter.as_deref()) {
+                    for t in threads {
+                        conversations.push(t.to_conversation_summary(&codex_paths.base_dir));
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort combined conversations by last_modified_time descending
+    conversations.sort_by(|a, b| b.last_modified_time.cmp(&a.last_modified_time));
 
     let filtered: Vec<_> = conversations
         .into_iter()
@@ -884,8 +1002,69 @@ fn handle_list(
     table
         .load_preset(UTF8_FULL)
         .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec![
+        .set_content_arrangement(ContentArrangement::Dynamic);
+
+    if all_agents {
+        table.set_header(vec![
+            Cell::new("Agent").add_attribute(Attribute::Bold),
+            Cell::new("ID").add_attribute(Attribute::Bold),
+            Cell::new("Title").add_attribute(Attribute::Bold),
+            Cell::new("Modified").add_attribute(Attribute::Bold),
+            Cell::new("Steps").add_attribute(Attribute::Bold),
+            Cell::new("Brain/Rollout").add_attribute(Attribute::Bold),
+        ]);
+
+        for conv in &filtered {
+            let is_codex = conv.source.contains("codex");
+            let agent_cell = if is_codex {
+                Cell::new("[CDX]").fg(Color::Green).add_attribute(Attribute::Bold)
+            } else {
+                Cell::new("[AGY]").fg(Color::Cyan).add_attribute(Attribute::Bold)
+            };
+
+            let display_title = if conv.title.trim().is_empty() {
+                "Untitled Conversation"
+            } else {
+                &conv.title
+            };
+
+            let short_id = if conv.conversation_id.len() > 8 {
+                &conv.conversation_id[..8]
+            } else {
+                &conv.conversation_id
+            };
+
+            let date = if conv.last_modified_time.len() >= 19 {
+                conv.last_modified_time[..19].replace('T', " ")
+            } else {
+                conv.last_modified_time.clone()
+            };
+
+            let brain_exists = if is_codex {
+                true
+            } else {
+                paths.conversation_brain(&conv.conversation_id).exists()
+            };
+
+            table.add_row(vec![
+                agent_cell,
+                Cell::new(short_id).fg(Color::DarkGrey),
+                Cell::new(display_title).add_attribute(Attribute::Bold),
+                Cell::new(date).fg(Color::Cyan),
+                Cell::new(conv.step_count.to_string()).fg(Color::Yellow),
+                if brain_exists {
+                    Cell::new("✓").fg(Color::Green)
+                } else {
+                    Cell::new("-").fg(Color::DarkGrey)
+                },
+            ]);
+        }
+
+        println!("\n{}", "=== Multi-Agent Sessions (Antigravity & Codex) ===".bold().cyan());
+        println!("{table}");
+        println!("Total displayed: {}\n", filtered.len());
+    } else {
+        table.set_header(vec![
             Cell::new("ID").add_attribute(Attribute::Bold),
             Cell::new("Title").add_attribute(Attribute::Bold),
             Cell::new("Modified").add_attribute(Attribute::Bold),
@@ -894,52 +1073,326 @@ fn handle_list(
             Cell::new("DB").add_attribute(Attribute::Bold),
         ]);
 
-    for conv in &filtered {
-        let brain_exists = paths.conversation_brain(&conv.conversation_id).exists();
-        let db_exists = paths.conversation_db(&conv.conversation_id).exists();
+        for conv in &filtered {
+            let brain_exists = paths.conversation_brain(&conv.conversation_id).exists();
+            let db_exists = paths.conversation_db(&conv.conversation_id).exists();
 
-        let display_title = if conv.title.trim().is_empty() {
-            "Untitled Conversation"
-        } else {
-            &conv.title
-        };
+            let display_title = if conv.title.trim().is_empty() {
+                "Untitled Conversation"
+            } else {
+                &conv.title
+            };
 
-        let short_id = if conv.conversation_id.len() > 8 {
-            &conv.conversation_id[..8]
-        } else {
-            &conv.conversation_id
-        };
+            let short_id = if conv.conversation_id.len() > 8 {
+                &conv.conversation_id[..8]
+            } else {
+                &conv.conversation_id
+            };
 
-        let date = if conv.last_modified_time.len() >= 19 {
-            conv.last_modified_time[..19].replace('T', " ")
+            let date = if conv.last_modified_time.len() >= 19 {
+                conv.last_modified_time[..19].replace('T', " ")
+            } else {
+                conv.last_modified_time.clone()
+            };
+
+            table.add_row(vec![
+                Cell::new(short_id).fg(Color::DarkGrey),
+                Cell::new(display_title).add_attribute(Attribute::Bold),
+                Cell::new(date).fg(Color::Cyan),
+                Cell::new(conv.step_count.to_string()).fg(Color::Yellow),
+                if brain_exists {
+                    Cell::new("✓").fg(Color::Green)
+                } else {
+                    Cell::new("-").fg(Color::DarkGrey)
+                },
+                if db_exists {
+                    Cell::new("✓").fg(Color::Green)
+                } else {
+                    Cell::new("-").fg(Color::DarkGrey)
+                },
+            ]);
+        }
+
+        println!("\n{}", "=== Antigravity Conversations ===".bold().cyan());
+        println!("{table}");
+        println!("Total displayed: {}\n", filtered.len());
+    }
+
+    Ok(())
+}
+
+fn handle_codex_doctor() -> Result<()> {
+    println!("\n{}", "=== OpenAI Codex CLI Diagnostic (agx doctor) ===".bold().cyan());
+    let codex_paths = agx::codex::CodexPaths::discover()?;
+
+    // 1. Binary check
+    match codex_paths.find_binary() {
+        Some(bin) => {
+            let ver_output = std::process::Command::new(&bin).arg("--version").output();
+            let ver_str = ver_output
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .unwrap_or_else(|_| "unknown".to_string());
+            println!("  ✔ Binary:       {} ({})", bin.display().to_string().green(), ver_str.cyan());
+        }
+        None => {
+            println!("  ✖ Binary:       {}", "Not found in PATH or ~/.local/bin/codex".red());
+        }
+    }
+
+    // 2. Base directory
+    if codex_paths.base_dir.exists() {
+        println!("  ✔ Home Dir:     {}", codex_paths.base_dir.display().to_string().green());
+    } else {
+        println!("  ✖ Home Dir:     {} ({})", codex_paths.base_dir.display().to_string().yellow(), "not found".yellow());
+    }
+
+    // 3. SQLite Database
+    match codex_paths.state_db() {
+        Some(db_path) => {
+            let db = agx::codex::CodexDb::new(&db_path);
+            let threads_count = db.list_threads(None).map(|t| t.len()).unwrap_or(0);
+            println!("  ✔ State DB:     {} ({} threads)", db_path.display().to_string().green(), threads_count);
+        }
+        None => {
+            println!("  ✖ State DB:     {}", "No state_*.sqlite found".yellow());
+        }
+    }
+
+    // 4. Config TOML
+    let config_file = codex_paths.config_file();
+    if config_file.exists() {
+        let mcp_servers = agx::codex::McpBridge::read_codex_mcp(&config_file).unwrap_or_default();
+        println!("  ✔ Config TOML:  {} ({} MCP servers configured)", config_file.display().to_string().green(), mcp_servers.len());
+        for s in &mcp_servers {
+            println!("      - {}", s.name.cyan());
+        }
+    } else {
+        println!("  ✖ Config TOML:  {}", config_file.display().to_string().yellow());
+    }
+
+    // 5. Skills
+    let skills_dir = codex_paths.skills_dir();
+    if skills_dir.exists() {
+        let skills = agx::codex::SkillsBridge::list_skills(&skills_dir, false).unwrap_or_default();
+        let sys_skills = agx::codex::SkillsBridge::list_skills(&codex_paths.system_skills_dir(), false).unwrap_or_default();
+        println!("  ✔ Skills Dir:   {} ({} user skills, {} system skills)", skills_dir.display().to_string().green(), skills.len(), sys_skills.len());
+        for s in &skills {
+            println!("      - {} ({})", s.name.cyan(), if s.is_symlink { "symlink" } else { "directory" });
+        }
+    } else {
+        println!("  ✖ Skills Dir:   {}", skills_dir.display().to_string().yellow());
+    }
+
+    println!();
+    Ok(())
+}
+
+fn handle_codex_list(
+    workspace_filter: Option<String>,
+    limit: usize,
+    json: bool,
+) -> Result<()> {
+    let codex_paths = agx::codex::CodexPaths::discover()?;
+    let db_path = codex_paths
+        .state_db()
+        .context("Codex state database not found (~/.codex/state_*.sqlite)")?;
+    let db = agx::codex::CodexDb::new(&db_path);
+    let threads = db.list_threads(workspace_filter.as_deref())?;
+
+    let filtered: Vec<_> = threads.into_iter().take(limit).collect();
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&filtered)?);
+        return Ok(());
+    }
+
+    if filtered.is_empty() {
+        println!("{}", "No matching Codex threads found.".yellow());
+        return Ok(());
+    }
+
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("ID").add_attribute(Attribute::Bold),
+            Cell::new("Title").add_attribute(Attribute::Bold),
+            Cell::new("Model").add_attribute(Attribute::Bold),
+            Cell::new("Tokens").add_attribute(Attribute::Bold),
+            Cell::new("CWD").add_attribute(Attribute::Bold),
+            Cell::new("Status").add_attribute(Attribute::Bold),
+        ]);
+
+    for t in &filtered {
+        let short_id = if t.id.len() > 8 { &t.id[..8] } else { &t.id };
+        let model = t.model.as_deref().unwrap_or("codex");
+        let status_str = if t.archived { "archived" } else { "active" };
+        let status_color = if t.archived { Color::DarkGrey } else { Color::Green };
+
+        let clean_title = t
+            .title
+            .lines()
+            .next()
+            .unwrap_or("Codex Session")
+            .trim();
+        let display_title = if clean_title.len() > 50 {
+            format!("{}...", &clean_title[..47])
         } else {
-            conv.last_modified_time.clone()
+            clean_title.to_string()
         };
 
         table.add_row(vec![
             Cell::new(short_id).fg(Color::DarkGrey),
             Cell::new(display_title).add_attribute(Attribute::Bold),
-            Cell::new(date).fg(Color::Cyan),
-            Cell::new(conv.step_count.to_string()).fg(Color::Yellow),
-            if brain_exists {
-                Cell::new("✓").fg(Color::Green)
-            } else {
-                Cell::new("-").fg(Color::DarkGrey)
-            },
-            if db_exists {
-                Cell::new("✓").fg(Color::Green)
-            } else {
-                Cell::new("-").fg(Color::DarkGrey)
-            },
+            Cell::new(model).fg(Color::Cyan),
+            Cell::new(t.tokens_used.to_string()).fg(Color::Yellow),
+            Cell::new(&t.cwd).fg(Color::DarkGrey),
+            Cell::new(status_str).fg(status_color),
         ]);
     }
 
-    println!("\n{}", "=== Antigravity Conversations ===".bold().cyan());
+    println!("\n{}", "=== OpenAI Codex Threads ===".bold().green());
     println!("{table}");
     println!("Total displayed: {}\n", filtered.len());
 
     Ok(())
 }
+
+fn handle_codex_sync(
+    paths: &AntigravityPaths,
+    sync_skills: bool,
+    sync_mcp: bool,
+    symlink: bool,
+    to_antigravity: bool,
+    overwrite: bool,
+) -> Result<()> {
+    println!("\n{}", "=== Antigravity <-> Codex Synchronization ===".bold().cyan());
+    let codex_paths = agx::codex::CodexPaths::discover()?;
+    let do_all = !sync_skills && !sync_mcp;
+
+    // 1. Sync MCP
+    if sync_mcp || do_all {
+        let ag_mcp = agx::codex::McpBridge::find_antigravity_mcp_config()
+            .context("Could not find Antigravity MCP config path")?;
+        let cdx_toml = codex_paths.config_file();
+
+        if to_antigravity {
+            println!("Syncing MCP: Codex (TOML) -> Antigravity (JSON)...");
+            let count = agx::codex::McpBridge::sync_codex_to_antigravity(&cdx_toml, &ag_mcp)?;
+            println!("  ✔ Synced {} MCP server definition(s) to Antigravity ({:?})", count, ag_mcp);
+        } else {
+            println!("Syncing MCP: Antigravity (JSON) -> Codex (TOML)...");
+            let count = agx::codex::McpBridge::sync_antigravity_to_codex(&ag_mcp, &cdx_toml)?;
+            println!("  ✔ Synced {} MCP server definition(s) to Codex ({:?})", count, cdx_toml);
+        }
+    }
+
+    // 2. Sync Skills
+    if sync_skills || do_all {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let ws_skills = cwd.join(".agents").join("skills");
+        let ag_builtin = paths.base_dir.join("builtin").join("skills");
+        let cdx_skills = codex_paths.skills_dir();
+
+        let src_skills = if ws_skills.exists() {
+            ws_skills
+        } else {
+            ag_builtin
+        };
+
+        if to_antigravity {
+            println!("Syncing Skills: Codex (~/.codex/skills) -> Workspace (.agents/skills)...");
+            let target = cwd.join(".agents").join("skills");
+            let report = agx::codex::SkillsBridge::sync_skills(&cdx_skills, &target, symlink, overwrite)?;
+            println!("  ✔ Synced {} skill(s) (skipped: {})", report.synced.len(), report.skipped.len());
+            for s in &report.synced {
+                println!("    + {}", s.green());
+            }
+        } else {
+            println!("Syncing Skills: Antigravity ({:?}) -> Codex (~/.codex/skills)...", src_skills);
+            let report = agx::codex::SkillsBridge::sync_skills(&src_skills, &cdx_skills, symlink, overwrite)?;
+            println!("  ✔ Synced {} skill(s) (skipped: {})", report.synced.len(), report.skipped.len());
+            for s in &report.synced {
+                println!("    + {}", s.green());
+            }
+        }
+    }
+
+    println!("\n{}", "✔ Synchronization completed successfully.".green().bold());
+    Ok(())
+}
+
+fn handle_handoff(
+    paths: &AntigravityPaths,
+    from_codex: Option<String>,
+    _to_codex: bool,
+    id: Option<String>,
+    dry_run: bool,
+) -> Result<()> {
+    if let Some(cdx_thread_id) = from_codex {
+        println!("\n{}", "=== Codex -> Antigravity Handoff ===".bold().cyan());
+        let codex_paths = agx::codex::CodexPaths::discover()?;
+        let db_path = codex_paths.state_db().context("Codex state database not found")?;
+        let db = agx::codex::CodexDb::new(&db_path);
+        let thread = db
+            .get_thread(&cdx_thread_id)?
+            .with_context(|| format!("Codex thread '{}' not found", cdx_thread_id))?;
+
+        if dry_run {
+            println!(
+                "Dry-run: Would import thread '{}' ({}) into Antigravity.",
+                thread.id, thread.title
+            );
+            return Ok(());
+        }
+
+        let new_id = agx::codex::HandoffEngine::import_codex_thread_to_antigravity(paths, &thread)?;
+        println!(
+            "{}",
+            format!("✔ Successfully imported into Antigravity session: {}", new_id)
+                .green()
+                .bold()
+        );
+        println!("You can now inspect or resume this session inside the Antigravity IDE.");
+        return Ok(());
+    }
+
+    // Default: Antigravity -> Codex
+    println!("\n{}", "=== Antigravity -> Codex Handoff ===".bold().cyan());
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // Resolve conversation ID
+    let conv_id = if let Some(target_id) = id {
+        target_id
+    } else {
+        let db = Database::new(&paths.summaries_db());
+        let convs = db.list_conversations()?;
+        let cwd_str = cwd.to_string_lossy().to_string();
+        let matched = convs.into_iter().find(|c| c.workspace_uris.contains(&cwd_str));
+        matched
+            .context("No Antigravity conversation found for current workspace. Specify --id <conversation_id>")?
+            .conversation_id
+    };
+
+    let prompt = agx::codex::HandoffEngine::build_handoff_prompt(paths, &conv_id, &cwd)?;
+
+    if dry_run {
+        println!("{}", "--- Synthesized Handoff Prompt ---".bold().yellow());
+        println!("{}", prompt);
+        return Ok(());
+    }
+
+    let codex_paths = agx::codex::CodexPaths::discover()?;
+    let bin = codex_paths
+        .find_binary()
+        .context("Codex CLI binary not found in PATH or ~/.local/bin/codex")?;
+
+    agx::codex::HandoffEngine::launch_codex_interactive(&bin, &cwd, &prompt)?;
+    Ok(())
+}
+
 
 fn select_conversation_interactively(
     conversations: &[agx::models::ConversationSummary],

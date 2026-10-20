@@ -37,4 +37,5 @@ sha2 = "0.10"
 similar = "2.6"
 ratatui = "0.30"
 crossterm = "0.28"
+toml = "0.8"
 

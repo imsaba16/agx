@@ -14,5 +14,6 @@ pub mod remapper;
 pub mod sanitizer;
 pub mod search;
 pub mod security;
+pub mod codex;
 pub mod summaries_pb;
 pub mod ui;
